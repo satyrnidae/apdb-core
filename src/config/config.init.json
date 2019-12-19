@@ -1,0 +1,7 @@
+{
+  "token": "",
+  "defaultPrefix": "!",
+  "defaultNickname": "",
+  "showWelcomeMessage": true,
+  "loggingVerbosity": "INFO"
+}
