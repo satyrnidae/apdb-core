@@ -1,0 +1,24 @@
+{
+  "name": "apdb-core",
+  "version": "1.0.0",
+  "description": "Core functionality for the 'Another Pluggable Discord Bot' project",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/satyrnidae/apdb-core.git"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "plugin"
+  ],
+  "author": "Isabel Maskrey (satyrnidae)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/satyrnidae/apdb-core/issues"
+  },
+  "homepage": "https://github.com/satyrnidae/apdb-core#readme"
+}
