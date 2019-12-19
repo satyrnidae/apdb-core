@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "outDir": "./bin",
+    "esModuleInterop": true,
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "baseUrl": "/src"
+  },
+  "include": [
+      "src/**/*.ts",
+      "config/**/*.json"
+  ],
+  "exclude": [
+    "config/config.init.json"
+  ]
+}
