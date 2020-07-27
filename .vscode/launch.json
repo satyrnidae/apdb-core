@@ -7,20 +7,9 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch via NPM",
-      "runtimeExecutable": "npm",
-      "console": "integratedTerminal",
-      "runtimeArgs": [
-        "run-script",
-        "debug"
-      ],
-      "port": 9229
-    },
-    {
-      "type": "node",
-      "request": "launch",
       "name": "Launch Program",
-      "program": "${workspaceFolder}/bin/index.js",
+      "program": "${workspaceFolder}/bin/app.js",
+      "preLaunchTask": "nps: build - package-scripts.js",
       "console": "integratedTerminal",
       "outFiles": [
         "${workspaceFolder}/bin/**/*.js"

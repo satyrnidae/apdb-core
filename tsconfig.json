@@ -5,10 +5,9 @@
     "moduleResolution": "node",
     "outDir": "./bin",
     "esModuleInterop": true,
-    "sourceMap": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "baseUrl": "/src"
+    "baseUrl": "./src"
   },
   "include": [
       "src/**/*.ts",

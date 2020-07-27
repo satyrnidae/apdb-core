@@ -65,3 +65,5 @@ bin/
 
 # SQLite3 Database
 *.db
+
+modules/

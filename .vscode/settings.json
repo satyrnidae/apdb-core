@@ -5,12 +5,16 @@
   "[jsonc]": {
     "editor.tabSize": 2
   },
+  "[javascript]": {
+    "editor.tabSize": 2
+  },
   "[typescript]": {
-    "editor.tabSize": 4
+    "editor.tabSize": 2
   },
   "files.encoding": "utf8",
   "editor.detectIndentation": false,
   "editor.rulers": [
     80
-  ]
+  ],
+  "typescript.tsdk": "node_modules\\typescript\\lib"
 }
