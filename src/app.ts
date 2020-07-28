@@ -1,7 +1,7 @@
 import { resolve } from "path";
 import { readFileSync } from "fs";
 import * as semver from 'semver';
-import { Container, LoggingService as ILoggingService, ModuleService as IModuleService, ServiceIdentifiers, Lifecycle } from "@satyrnidae/apdb-api";
+import { Container, ILoggingService, IModuleService, ServiceIdentifiers } from "@satyrnidae/apdb-api";
 import { LoggingService } from "./core/services/logging-service";
 import { ModuleService } from "./core/services/module-service";
 import { Robot } from "./core/robot";
@@ -30,7 +30,7 @@ log.info('║  (c) 2020 Isabel Maskrey    ╱   ╲▁▁▁ ╱  ╲│  ║');
 log.info('║  All rights reserved       ╱        ╲│  ╱   ║');
 log.info('║                            │ │ │ ╱     ╱    ║');
 log.info('║                            │ │ │ ╲  ╱▁╱     ║');
-log.info('║                           ╱▁╱▁╱▁╱▁▁╱        ║');
+log.info('║                            ╱▁╱▁╱▁╱▁▁╱       ║');
 log.info('║                                             ║');
 log.info('╚═════════════════════════════════════════════╝');
 log.info();

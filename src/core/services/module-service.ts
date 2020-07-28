@@ -1,7 +1,14 @@
-import { ModuleService as IModuleService, ServiceIdentifiers, EventService, CommandService, Module, FsAsync, forEachAsync, Command, EventHandler, OneOrMany, LoggingService, Logger, toOneOrMany, toOne, ModuleInfo } from '@satyrnidae/apdb-api';
 import { injectable, inject } from 'inversify';
-import { lstatSync, readdirSync, Stats, read } from 'fs';
+import { Stats } from 'fs';
+import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, forEachAsync, OneOrMany, toOneOrMany, IModuleInfo, IModuleDetails, Resolve, Reject } from '@satyrnidae/apdb-api';
+import { checkDependenciesAsync } from '../../util/check-dependencies';
+import { fsa } from '../../util/fs-async';
+import { Candidates } from '../../util/candidate-validation';
+import * as tmp from 'tmp-promise';
 import * as semver from 'semver';
+import AdmZip from 'adm-zip';
+
+tmp.setGracefulCleanup();
 
 const Modules: Module[] = [];
 
@@ -9,17 +16,16 @@ const Modules: Module[] = [];
 export class ModuleService implements IModuleService {
   private readonly log: Logger;
 
-  constructor(//@inject(ServiceIdentifiers.Event) private eventService: EventService,
-    //@inject(ServiceIdentifiers.Command) private commandService: CommandService,
-    @inject(ServiceIdentifiers.Logging) loggingService: LoggingService) {
+  constructor(@inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService) {
     this.log = loggingService.getLogger('core');
   }
 
   public async preInitialize(): Promise<void> {
-    await this.loadModules();
-    await this.registerDependencies();
+    const loadModulesTask: Promise<void> = this.loadModules()
+      .then(async (): Promise<void> => this.registerDependencies())
+      .then(async (): Promise<void> => forEachAsync(Modules, async (module: Module): Promise<void> => module.preInitialize()));
 
-    return forEachAsync(Modules, async (module: Module): Promise<void> => module.preInitialize());
+    return loadModulesTask;
   }
 
   public async initialize(): Promise<void> {
@@ -41,7 +47,7 @@ export class ModuleService implements IModuleService {
   }
 
   public getAllModules(): OneOrMany<Module> {
-    return new Array(...Modules);
+    return toOneOrMany(new Array(...Modules));
   }
 
   public getModuleById(moduleId: string): Module {
@@ -64,49 +70,118 @@ export class ModuleService implements IModuleService {
   private async loadModules(): Promise<void> {
     this.log.info(`Loading modules from directory '${(global as any).moduleDirectory}'`);
 
-    const moduleFolders: string[] = await FsAsync.readdirAsync((global as any).moduleDirectory);
+    const candidateFiles: string[] = await fsa.readdirAsync((global as any).moduleDirectory);
+    const modules: IModuleInfo[] = await this.verifyCandidates(...candidateFiles);
+    return forEachAsync(modules, async (module: IModuleInfo): Promise<void> => this.loadModule(module));
+  }
 
-    return forEachAsync(moduleFolders, async (moduleFolder: string): Promise<void> => this.loadModule(moduleFolder));
+  private async verifyCandidates(...candidateFiles: string[]): Promise<IModuleInfo[]> {
+    const candidates: IModuleInfo[] = [];
+    // Validate
+    await forEachAsync(candidateFiles, async (candidateFile: string): Promise<void> => {
+      try {
+        const result = await Candidates.validateCandidate(candidateFile);
+        if (result) {
+          candidates.push(result);
+        }
+      } catch (ex) {
+        this.log.warn(`Unable to load module from ${candidateFile}.`);
+        this.log.trace(ex);
+      }
+    });
+
+    // Sort by id and version preference
+    candidates.sort((a, b) => {
+      const compare: number = a.id.localeCompare(b.id);
+      if (compare === 0) {
+        return -(semver.compare(a.version, b.version));
+      }
+      return -compare;
+    });
+
+    // Dedupe
+    const dedupe: IModuleInfo[] = Array.from(new Set(candidates.map(c => c.id)))
+      .map(id => {
+        const candidate = candidates.find(c => c.id === id);
+        this.log.debug(`Module ${candidate.id} to be loaded from ${candidate.details.path}.`);
+        return candidate;
+      });
+
+    return dedupe;
   }
 
   private async registerDependencies(): Promise<void> {
     return forEachAsync(Modules, async (module: Module): Promise<void> => module.registerDependencies());
   }
 
-  private async loadModule(moduleFolder: string): Promise<void> {
-    try {
-      const modulePath: string = `${(global as any).moduleDirectory}/${moduleFolder}`;
-      const modulePathLstatTask: Promise<Stats> = FsAsync.lstatAsync(modulePath);
-      if (!(await modulePathLstatTask).isDirectory()) {
-        this.log.warn(`Not a valid module: ${moduleFolder}`);
-        this.log.debug('The module path does not resolve to a directory.');
-        return;
+  private async loadModule(moduleInfo: IModuleInfo): Promise<void> {
+    let modulePath: string = moduleInfo.details.path;
+    const stats: Stats = await fsa.lstatAsync(modulePath);
+      if (!stats.isDirectory()) {
+        if (stats.isFile) {
+          const zippedFolder: AdmZip = new AdmZip(modulePath);
+
+          // Create a new temp directory
+          const directory: any = await tmp.dir({
+            discardDescriptor: true,
+            template: `apdbXXXXXX${moduleInfo.details.containerName}`,
+            unsafeCleanup: true,
+            tmpdir: (global as any).moduleDirectory
+          });
+          moduleInfo.details.path = modulePath = directory.path;
+
+          // Extract the files.
+          await new Promise<void>((resolve: Resolve<void>, reject: Reject) => {
+            zippedFolder.extractAllToAsync(directory.path, true, (error: Error) => {
+              if (error) {
+                reject(error);
+              }
+              resolve();
+            });
+          });
+        } else {
+          this.log.warn(`Failed to load module: ${moduleInfo.name}`);
+          this.log.debug('The module path does not resolve to a directory.');
+          return;
+        }
       }
 
-      const packageJsonExistsTask: Promise<boolean> = FsAsync.existsAsync(`${modulePath}/package.json`);
+      const packageJsonExistsTask: Promise<boolean> = fsa.existsAsync(`${modulePath}/package.json`);
       if (!(await packageJsonExistsTask)) {
-        this.log.warn(`Not a valid module: ${moduleFolder}`);
+        this.log.warn(`Failed to load module: ${moduleInfo.name}`);
         this.log.debug('No package.json file exists.');
         return;
       }
 
-      const readPackageJsonTask: Promise<Buffer> = FsAsync.readFileAsync(`${modulePath}/package.json`);
-      const packageInfo: any = JSON.parse((await readPackageJsonTask).toString());
-      if (!packageInfo) {
-        this.log.warn(`Not a valid module: ${moduleFolder}`);
-        this.log.debug('The package.json file could not be read.');
+      const mainFilePath: string = `${modulePath}/${moduleInfo.details.entryPoint}`;
+      const mainFileExistsTask: Promise<boolean> = fsa.existsAsync(mainFilePath);
+      if (!(await mainFileExistsTask)) {
+        this.log.warn(`Failed to load module: ${moduleInfo.name}`);
+        this.log.debug('The module specified an invalid main file.');
+        return;
       }
 
-      const apiVersion: string = packageInfo.dependencies['@satyrnidae/apdb-api'] as string;
-      if (!semver.satisfies((global as any).apiVersion, apiVersion)) {
-        this.log.warn(`Not a valid module: ${moduleFolder}`);
-        this.log.debug(`The module was built with an incompatible version of the API (${(global as any).apiVersion} does not satisfy ${apiVersion})`);
+      const installDependencies: Promise<any> = checkDependenciesAsync({
+        packageDir: modulePath,
+        scopeList: ['dependencies', 'peerDependencies'],
+        install: true,
+        verbose: true,
+        log: (...data: any[]) => this.log.trace(...data),
+        error: (...data: any[]) => this.log.warn(...data)
+      });
+
+      const log: Logger = this.loggingService.getLogger(moduleInfo.id);
+
+      await installDependencies;
+      const moduleImport: any = require(mainFilePath);
+      const module: Module = new moduleImport.default(moduleInfo, log);
+      if (!module || !(module instanceof Module)) {
+        this.log.warn(`Failed to load module: ${moduleInfo.name}`);
+        this.log.debug('Unable to construct the module.');
+        return;
       }
 
-
-    } catch (ex) {
-      this.log.error(`Not a valid module: ${moduleFolder}`);
-      this.log.debug(ex);
-    }
+      Modules.push(module);
+      this.log.info(`Loaded new module: ${moduleInfo.name}@${moduleInfo.version}`);
   }
 }
