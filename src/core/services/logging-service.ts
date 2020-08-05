@@ -1,7 +1,7 @@
 import { injectable } from "inversify";
 import { ILoggingService, Logger } from "@satyrnidae/apdb-api"
 
-const Loggers: Logger[] = [new Logger('core', 'trace')];
+const Loggers: Logger[] = [];
 
 @injectable()
 export class LoggingService implements ILoggingService {
