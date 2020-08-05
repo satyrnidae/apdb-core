@@ -23,7 +23,7 @@
   "homepage": "https://github.com/satyrnidae/apdb-core#readme",
   "dependencies": {
     "@discordjs/uws": "^10.149.0",
-    "@satyrnidae/apdb-api": "^2.3.1",
+    "@satyrnidae/apdb-api": "2.4.0",
     "@satyrnidae/apdb-utils": "0.0.1",
     "adm-zip": "^0.4.16",
     "bufferutil": "^4.0.0",
