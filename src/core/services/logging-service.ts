@@ -5,8 +5,8 @@ const Loggers: Logger[] = [new Logger('core', 'trace')];
 
 @injectable()
 export class LoggingService implements ILoggingService {
-  getLogger(loggerId: string): Logger {
-    let logger: Logger = Loggers.find((logger) => logger.getId() == loggerId);
+  public getLogger(loggerId: string): Logger {
+    let logger: Logger = Loggers.find(l => l.getId() === loggerId);
     if (!logger) {
       logger = new Logger(loggerId);
       Loggers.push(logger);

@@ -1,6 +1,6 @@
 // Performs valdation of module candidates
 
-import { IModuleInfo, Resolve, IModuleDetails } from "@satyrnidae/apdb-api";
+import { IModuleInfo, Resolve, IModuleDetails, IModulePackage, IModulePackageDetails } from "@satyrnidae/apdb-api";
 import { fsa } from "./fs-async";
 import { Stats } from "fs";
 import AdmZip, { IZipEntry } from "adm-zip";
@@ -45,7 +45,7 @@ async function isZipCandidate(candidateFile: string, stats: Stats): Promise<File
 
 async function readPackageJson(buffer: Buffer): Promise<IModuleInfo> {
   // Read package JSON
-  const packageInfo: any = JSON.parse(buffer.toString());
+  const packageInfo: IModulePackage = JSON.parse(buffer.toString()) as IModulePackage;
   if (!packageInfo) {
     throw new Error('The package.json file could not be read.');
   }
@@ -62,7 +62,7 @@ async function readPackageJson(buffer: Buffer): Promise<IModuleInfo> {
     throw new Error(`The module was built with an incompatible version of the API (${(global as any).apiVersion} does not satisfy ${apiVersion})`);
   }
 
-  const packageModuleInfo: any = packageInfo['apdb-module'];
+  const packageModuleInfo: IModulePackageDetails = packageInfo['apdb-module'];
   if (!packageModuleInfo) {
     throw new Error('The node module did not specify required apdb-module section.');
   }

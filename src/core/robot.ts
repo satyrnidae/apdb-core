@@ -1,10 +1,11 @@
 import { injectable, inject } from "inversify";
-import { ServiceIdentifiers, IModuleService, ILifecycle } from '@satyrnidae/apdb-api';
+import { ServiceIdentifiers, IModuleService, ILifecycle, IClientService } from '@satyrnidae/apdb-api';
 
 @injectable()
 export class Robot implements ILifecycle {
 
-    public constructor (@inject(ServiceIdentifiers.Module) private moduleService: IModuleService) { }
+    public constructor (@inject(ServiceIdentifiers.Module) private readonly moduleService: IModuleService,
+      @inject(ServiceIdentifiers.Client) private readonly clientService: IClientService) { }
 
     public async preInitialize() : Promise<void> {
         return this.moduleService.preInitialize();
@@ -19,6 +20,6 @@ export class Robot implements ILifecycle {
     }
 
     public async run() : Promise<any> {
-        //return this.clientService.login();
+        return this.clientService.login();
     }
 }

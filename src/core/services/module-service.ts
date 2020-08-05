@@ -7,10 +7,12 @@ import { Candidates } from '../../util/candidate-validation';
 import * as tmp from 'tmp-promise';
 import * as semver from 'semver';
 import AdmZip from 'adm-zip';
+import { Mutex } from '../../util/mutex';
 
 tmp.setGracefulCleanup();
 
 const Modules: Module[] = [];
+const ModulesMutex: Mutex<void> = new Mutex<void>();
 
 @injectable()
 export class ModuleService implements IModuleService {
@@ -128,7 +130,7 @@ export class ModuleService implements IModuleService {
             unsafeCleanup: true,
             tmpdir: (global as any).moduleDirectory
           });
-          moduleInfo.details.path = modulePath = directory.path;
+          modulePath = directory.path;
 
           // Extract the files.
           await new Promise<void>((resolve: Resolve<void>, reject: Reject) => {
@@ -181,7 +183,8 @@ export class ModuleService implements IModuleService {
         return;
       }
 
-      Modules.push(module);
+      await ModulesMutex.dispatch(() => Modules.push(module));
+
       this.log.info(`Loaded new module: ${moduleInfo.name}@${moduleInfo.version}`);
   }
 }

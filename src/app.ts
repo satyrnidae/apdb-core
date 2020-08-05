@@ -1,16 +1,21 @@
 import { resolve } from "path";
 import { readFileSync } from "fs";
 import * as semver from 'semver';
-import { Container, ILoggingService, IModuleService, ServiceIdentifiers } from "@satyrnidae/apdb-api";
+import { Container, ILoggingService, IModuleService, ServiceIdentifiers, IConfigurationService, IClientService } from "@satyrnidae/apdb-api";
+import { ConfigurationService } from "./core/services/configuration-service";
 import { LoggingService } from "./core/services/logging-service";
 import { ModuleService } from "./core/services/module-service";
 import { Robot } from "./core/robot";
+import { ClientService } from "./core/services/client-service";
 
 const packageInfo: any = JSON.parse(readFileSync('package.json').toString());
 
 (global as any).moduleDirectory = resolve(`${__dirname}/../modules`);
 (global as any).apiVersion = semver.clean((packageInfo.dependencies['@satyrnidae/apdb-api'] as string).replace('^', ''));
+(global as any).configPath = resolve(`${__dirname}/../config.json`);
 
+Container.bind<IConfigurationService>(ServiceIdentifiers.Configuration).to(ConfigurationService);
+Container.bind<IClientService>(ServiceIdentifiers.Client).to(ClientService);
 Container.bind<ILoggingService>(ServiceIdentifiers.Logging).to(LoggingService);
 Container.bind<IModuleService>(ServiceIdentifiers.Module).to(ModuleService);
 
@@ -44,5 +49,5 @@ robot.preInitialize()
     .then(() => robot.run())
     .catch(reason => log.error(reason))
     .finally(() => {
-        log.info('Service Started');
+        log.info('Initialization complete.');
     });
