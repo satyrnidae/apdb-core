@@ -61,7 +61,7 @@ jspm_packages/
 bin/
 
 # local configuration
-*/config/config.json
+config.json
 
 # SQLite3 Database
 *.db
