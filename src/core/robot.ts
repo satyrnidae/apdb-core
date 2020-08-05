@@ -3,23 +3,22 @@ import { ServiceIdentifiers, IModuleService, ILifecycle, IClientService } from '
 
 @injectable()
 export class Robot implements ILifecycle {
+  public constructor(@inject(ServiceIdentifiers.Module) private readonly moduleService: IModuleService,
+    @inject(ServiceIdentifiers.Client) private readonly clientService: IClientService) { }
 
-    public constructor (@inject(ServiceIdentifiers.Module) private readonly moduleService: IModuleService,
-      @inject(ServiceIdentifiers.Client) private readonly clientService: IClientService) { }
+  public async preInitialize(): Promise<void> {
+    return this.moduleService.preInitialize();
+  }
 
-    public async preInitialize() : Promise<void> {
-        return this.moduleService.preInitialize();
-    }
+  public async initialize(): Promise<void> {
+    return this.moduleService.initialize();
+  }
 
-    public async initialize() : Promise<void> {
-        return this.moduleService.initialize();
-    }
+  public async postInitialize(): Promise<void> {
+    return this.moduleService.postInitialize();
+  }
 
-    public async postInitialize() : Promise<void> {
-        return this.moduleService.postInitialize();
-    }
-
-    public async run() : Promise<any> {
-        return this.clientService.login();
-    }
+  public async run(): Promise<any> {
+    return this.clientService.login();
+  }
 }
