@@ -104,7 +104,7 @@ export class ModuleService implements IModuleService {
     const dedupe: IModuleInfo[] = Array.from(new Set(candidates.map(c => c.id)))
       .map(id => {
         const candidate = candidates.find(c => c.id === id);
-        this.log.debug(`Module ${candidate.id} to be loaded from ${candidate.details.path}.`);
+        this.log.info(`Loading module ${candidate.id}@${candidate.version} from ${candidate.details.path}.`);
         return candidate;
       });
 
@@ -184,6 +184,6 @@ export class ModuleService implements IModuleService {
 
       await ModulesMutex.dispatch(() => Modules.push(module));
 
-      this.log.info(`Loaded new module: ${moduleInfo.name}@${moduleInfo.version}`);
+      this.log.info(`Loaded new module: ${moduleInfo.id}@${moduleInfo.version}`);
   }
 }
