@@ -1,7 +1,6 @@
-import { IAppConfiguration, IConfigurationService } from "@satyrnidae/apdb-api";
-import { injectable } from "inversify";
-import { fsa } from "../../util/fs-async"
-import { Mutex } from "../../util/mutex";
+import { IAppConfiguration, IConfigurationService } from '@satyrnidae/apdb-api';
+import { fsa, Mutex } from '@satyrnidae/apdb-utils';
+import { injectable } from 'inversify';
 
 let Config: IAppConfiguration = null;
 const ConfigMutex: Mutex<IAppConfiguration> = new Mutex<IAppConfiguration>();

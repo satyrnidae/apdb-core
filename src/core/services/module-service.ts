@@ -1,13 +1,11 @@
 import { injectable, inject } from 'inversify';
 import { Stats } from 'fs';
 import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, forEachAsync, OneOrMany, toOneOrMany, IModuleInfo, IModuleDetails, Resolve, Reject } from '@satyrnidae/apdb-api';
-import { checkDependenciesAsync } from '../../util/check-dependencies';
-import { fsa } from '../../util/fs-async';
-import { Candidates } from '../../util/candidate-validation';
+import { checkDependenciesAsync, fsa, Mutex } from '@satyrnidae/apdb-utils';
+import { Candidates } from './module/candidate-validation';
 import * as tmp from 'tmp-promise';
 import * as semver from 'semver';
 import AdmZip from 'adm-zip';
-import { Mutex } from '../../util/mutex';
 
 tmp.setGracefulCleanup();
 
