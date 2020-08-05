@@ -1,53 +1,84 @@
 import { resolve } from "path";
-import { readFileSync } from "fs";
 import * as semver from 'semver';
-import { Container, ILoggingService, IModuleService, ServiceIdentifiers, IConfigurationService, IClientService } from "@satyrnidae/apdb-api";
+import { Container, ILoggingService, IModuleService, ServiceIdentifiers, IConfigurationService, IClientService, IEventService, Logger, ILifecycle } from "@satyrnidae/apdb-api";
+import { sleep, fsa } from '@satyrnidae/apdb-utils';
 import { ConfigurationService } from "./core/services/configuration-service";
 import { LoggingService } from "./core/services/logging-service";
 import { ModuleService } from "./core/services/module-service";
 import { Robot } from "./core/robot";
 import { ClientService } from "./core/services/client-service";
+import { EventService } from "./core/services/event-service";
+import { Client } from "discord.js";
 
-const packageInfo: any = JSON.parse(readFileSync('package.json').toString());
+async function splash(log: Logger): Promise<void> {
+  log.info('╔═════════════════════════════════════════════╗');
+  log.info('║        Another Pluggable Discord Bot        ║');
+  log.info('║        ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔        ║');
+  log.info('║                            │╲▁╱╲            ║');
+  log.info('║                          ╷─┘    ╲      ▁▁▁  ║');
+  log.info('║                           ╲▁   ▁╱     ╱╲ │  ║');
+  log.info('║  (c) 2020 Isabel Maskrey    ╱   ╲▁▁▁ ╱  ╲│  ║');
+  log.info('║  All rights reserved       ╱        ╲│  ╱   ║');
+  log.info('║                            │ │ │ ╱     ╱    ║');
+  log.info('║                            │ │ │ ╲  ╱▁╱     ║');
+  log.info('║                            ╱▁╱▁╱▁╱▁▁╱       ║');
+  log.info('╚═════════════════════════════════════════════╝');
+  log.info();
+  log.info(`Version ${(global as any).version }`);
+  log.info(`API Version ${(global as any).apiVersion}`);
+  log.info();
 
-(global as any).moduleDirectory = resolve(`${__dirname}/../modules`);
-(global as any).apiVersion = semver.clean((packageInfo.dependencies['@satyrnidae/apdb-api'] as string).replace('^', ''));
-(global as any).configPath = resolve(`${__dirname}/../config.json`);
+  return sleep(3000);
+}
 
-Container.bind<IConfigurationService>(ServiceIdentifiers.Configuration).to(ConfigurationService);
-Container.bind<IClientService>(ServiceIdentifiers.Client).to(ClientService);
-Container.bind<ILoggingService>(ServiceIdentifiers.Logging).to(LoggingService);
-Container.bind<IModuleService>(ServiceIdentifiers.Module).to(ModuleService);
+async function executeLifecycle(lifecycle: ILifecycle): Promise<void> {
+  await lifecycle.preInitialize();
+  await lifecycle.initialize();
+  await lifecycle.postInitialize();
+  return lifecycle.run();
+}
 
-Container.bind<Robot>(Robot).toSelf().inSingletonScope();
+async function run(): Promise<void> {
+  // Read package
+  const packageInfo: any = JSON.parse((await fsa.readFileAsync('package.json')).toString());
 
-const log = Container.resolve<ILoggingService>(LoggingService).getLogger('core');
-const robot = Container.resolve<Robot>(Robot);
+  // Global settings
+  (global as any).version = packageInfo.version;
+  (global as any).moduleDirectory = resolve(`${__dirname}/../modules`);
+  (global as any).apiVersion = semver.clean((packageInfo.dependencies['@satyrnidae/apdb-api'] as string).replace('^', ''));
+  (global as any).configPath = resolve(`${__dirname}/../config.json`);
 
-log.info('╔═════════════════════════════════════════════╗');
-log.info('║                                             ║');
-log.info('║        Another Pluggable Discord Bot        ║');
-log.info('║        ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾        ║');
-log.info('║                            │╲▁╱╲            ║');
-log.info('║                          ╷─┘    ╲      ▁▁▁  ║');
-log.info('║                           ╲▁   ▁╱     ╱╲ │  ║');
-log.info('║  (c) 2020 Isabel Maskrey    ╱   ╲▁▁▁ ╱  ╲│  ║');
-log.info('║  All rights reserved       ╱        ╲│  ╱   ║');
-log.info('║                            │ │ │ ╱     ╱    ║');
-log.info('║                            │ │ │ ╲  ╱▁╱     ║');
-log.info('║                            ╱▁╱▁╱▁╱▁▁╱       ║');
-log.info('║                                             ║');
-log.info('╚═════════════════════════════════════════════╝');
-log.info();
-log.info(`Version ${packageInfo.version}`);
-log.info(`API Version ${(global as any).apiVersion}`);
-log.info();
+  // Core service bindings
+  Container.bind<IConfigurationService>(ServiceIdentifiers.Configuration).to(ConfigurationService);
+  Container.bind<IClientService>(ServiceIdentifiers.Client).to(ClientService);
+  Container.bind<IEventService>(ServiceIdentifiers.Event).to(EventService);
+  Container.bind<ILoggingService>(ServiceIdentifiers.Logging).to(LoggingService);
+  Container.bind<IModuleService>(ServiceIdentifiers.Module).to(ModuleService);
 
-robot.preInitialize()
-    .then(() => robot.initialize())
-    .then(() => robot.postInitialize())
-    .then(() => robot.run())
-    .catch(reason => log.error(reason))
-    .finally(() => {
-        log.info('Initialization complete.');
+  // Set up values for initialization
+  const log: Logger = Container.get<ILoggingService>(ServiceIdentifiers.Logging).getLogger('core');
+  const client: Client = Container.get<IClientService>(ServiceIdentifiers.Client).getClient();
+  const robot: Robot = Container.resolve(Robot);
+
+  log.setLogLevel('info');
+
+  client.on('disconnect', () => log.info('Client disconnected.'));
+  client.on('ready', () => log.info('Client ready!'));
+
+  process.on('SIGINT', function () {
+    log.trace("Caught interrupt signal");
+    client.destroy().finally(() => {
+      log.info('Exiting...')
+      process.exit();
     });
+  });
+
+  await splash(log);
+  try {
+    await executeLifecycle(robot);
+  } catch (err) {
+    log.error(err);
+  }
+}
+
+run().catch(process.exit);
