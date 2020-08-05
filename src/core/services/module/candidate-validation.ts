@@ -1,7 +1,7 @@
 // Performs valdation of module candidates
 
-import { IModuleInfo, Resolve, IModuleDetails, IModulePackage, IModulePackageDetails } from "@satyrnidae/apdb-api";
-import { fsa } from "@satyrnidae/apdb-utils";
+import { IModuleInfo, IModuleDetails, IModulePackage, IModulePackageDetails } from "@satyrnidae/apdb-api";
+import { fsa, Resolve } from "@satyrnidae/apdb-utils";
 import { Stats } from "fs";
 import AdmZip, { IZipEntry } from "adm-zip";
 import { satisfies } from "semver";

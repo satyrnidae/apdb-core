@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { Stats } from 'fs';
-import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, forEachAsync, OneOrMany, toOneOrMany, IModuleInfo, IModuleDetails, Resolve, Reject } from '@satyrnidae/apdb-api';
-import { checkDependenciesAsync, fsa, Mutex } from '@satyrnidae/apdb-utils';
+import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, IModuleInfo } from '@satyrnidae/apdb-api';
+import { checkDependenciesAsync, fsa, Mutex, forEachAsync, OneOrMany, toOneOrMany, Resolve, Reject } from '@satyrnidae/apdb-utils';
 import { Candidates } from './module/candidate-validation';
 import * as tmp from 'tmp-promise';
 import * as semver from 'semver';
