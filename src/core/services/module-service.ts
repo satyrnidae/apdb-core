@@ -1,6 +1,6 @@
 import { injectable, inject } from 'inversify';
 import { Stats } from 'fs';
-import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, IModuleInfo } from '@satyrnidae/apdb-api';
+import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, IModuleInfo, IEventService, EventHandler } from '@satyrnidae/apdb-api';
 import { checkDependenciesAsync, fsa, Mutex, forEachAsync, OneOrMany, toOneOrMany, Resolve, Reject } from '@satyrnidae/apdb-utils';
 import { Candidates } from './module/candidate-validation';
 import * as tmp from 'tmp-promise';
@@ -16,7 +16,8 @@ const ModulesMutex: Mutex<void> = new Mutex<void>();
 export class ModuleService implements IModuleService {
   private readonly log: Logger;
 
-  constructor(@inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService) {
+  constructor(@inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService,
+    @inject(ServiceIdentifiers.Event) private readonly eventService: IEventService) {
     this.log = loggingService.getLogger('core');
   }
 
@@ -37,7 +38,7 @@ export class ModuleService implements IModuleService {
       }
 
       if (module.events && module.events.length) {
-        //module.events.forEach((event: EventHandler) => this.eventService.registerEvent(event));
+        module.events.forEach((event: EventHandler) => this.eventService.registerEvent(event));
       }
     });
   }
