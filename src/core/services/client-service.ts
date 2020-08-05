@@ -13,7 +13,7 @@ export class ClientService implements IClientService {
     return TheClient.login(await this.configurationService.getToken());
   }
 
-  public async getClient(): Promise<Client> {
+  public getClient(): Client {
     return TheClient;
   }
 
