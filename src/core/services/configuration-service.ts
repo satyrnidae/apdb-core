@@ -3,7 +3,7 @@ import { fsa, Mutex } from '@satyrnidae/apdb-utils';
 import { injectable } from 'inversify';
 
 let Config: IAppConfiguration = null;
-const ConfigMutex: Mutex<IAppConfiguration> = new Mutex<IAppConfiguration>();
+const ConfigMutex: Mutex = new Mutex();
 
 @injectable()
 export class ConfigurationService implements IConfigurationService {

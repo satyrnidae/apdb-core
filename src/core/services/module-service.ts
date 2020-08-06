@@ -10,7 +10,7 @@ import AdmZip from 'adm-zip';
 tmp.setGracefulCleanup();
 
 const Modules: Module[] = [];
-const ModulesMutex: Mutex<void> = new Mutex<void>();
+const ModulesMutex: Mutex = new Mutex();
 
 @injectable()
 export class ModuleService implements IModuleService {
