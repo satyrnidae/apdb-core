@@ -1,6 +1,6 @@
 import { injectable, inject } from 'inversify';
 import { Stats } from 'fs';
-import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, IModuleInfo, IEventService, EventHandler } from '@satyrnidae/apdb-api';
+import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, IModuleInfo, IEventService, EventHandler, ICommandService, Command } from '@satyrnidae/apdb-api';
 import { checkDependenciesAsync, fsa, Mutex, forEachAsync, OneOrMany, toOneOrMany, Resolve, Reject } from '@satyrnidae/apdb-utils';
 import { Candidates } from './module/candidate-validation';
 import * as tmp from 'tmp-promise';
@@ -17,7 +17,8 @@ export class ModuleService implements IModuleService {
   private readonly log: Logger;
 
   constructor(@inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService,
-    @inject(ServiceIdentifiers.Event) private readonly eventService: IEventService) {
+    @inject(ServiceIdentifiers.Event) private readonly eventService: IEventService,
+    @inject(ServiceIdentifiers.Command) private readonly commandService: ICommandService) {
     this.log = loggingService.getLogger('core');
   }
 
@@ -34,7 +35,7 @@ export class ModuleService implements IModuleService {
       await module.initialize();
 
       if (module.commands && module.commands.length) {
-        //module.commands.forEach((command: Command) => this.commandService.register(command));
+        module.commands.forEach((command: Command) => this.commandService.register(command));
       }
 
       if (module.events && module.events.length) {
@@ -123,9 +124,9 @@ export class ModuleService implements IModuleService {
           const zippedFolder: AdmZip = new AdmZip(modulePath);
 
           // Create a new temp directory
-          const directory: any = await tmp.dir({
+          const directory: tmp.DirectoryResult = await tmp.dir({
             discardDescriptor: true,
-            template: `apdbXXXXXX${moduleInfo.details.containerName}`,
+            template: `tmp-XXXXXX`,
             unsafeCleanup: true,
             tmpdir: (global as any).moduleDirectory
           });

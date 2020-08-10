@@ -2,7 +2,7 @@ import { injectable, inject } from "inversify";
 import { Command, ICommandService, ServiceIdentifiers, IConfigurationService, ILoggingService, Logger, IDataService } from "@satyrnidae/apdb-api";
 import { Mutex, OneOrMany, toOne } from "@satyrnidae/apdb-utils";
 import { Guild } from "discord.js";
-import { GuildConfiguration } from "db/entity/guild-configuration";
+import { GuildConfiguration } from "../../db/entity/guild-configuration";
 
 const Commands: Command[] = [];
 const CommandMutex: Mutex = new Mutex();

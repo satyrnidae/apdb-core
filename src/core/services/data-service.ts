@@ -1,5 +1,5 @@
 import { injectable, inject } from "inversify";
-import { IDataService, IDataEntityFactory, DataEntity, FactoryRegistry, ServiceIdentifiers, ILoggingService, Logger } from "@satyrnidae/apdb-api";
+import { IDataService, IDataEntityFactory, DataEntity, FactoryRegistry, ServiceIdentifiers, ILoggingService, Logger, Container } from "@satyrnidae/apdb-api";
 import { RepositoryTarget, Mutex, OneOrMany } from "@satyrnidae/apdb-utils";
 import { Repository, Connection, createConnection, FindConditions } from "typeorm";
 
@@ -22,9 +22,9 @@ export class DataService implements IDataService {
     return (await this.getConnection()).getRepository<T>(target);
   }
 
-  public async registerFactory<T extends DataEntity>(result: new () => T, factory: (new () => IDataEntityFactory<T>)): Promise<void> {
+  public async registerFactory<T extends DataEntity>(result: new () => T, factory: (new (...args: any[]) => IDataEntityFactory<T>)): Promise<void> {
     return FactoryMutex.dispatch(() => {
-      const type: (new () => IDataEntityFactory<any>) = Factories[result.name];
+      const type: (new (...args: any[]) => IDataEntityFactory<any>) = Factories[result.name];
       if (type) {
         throw new Error(`Data factory bind failed: data factory ${type.name} for type ${result.name} was already registered when registering ${factory.name}`);
       }
@@ -34,8 +34,8 @@ export class DataService implements IDataService {
 
   public async getFactory<T extends DataEntity>(result: new () => T): Promise<IDataEntityFactory<T>> {
     return FactoryMutex.dispatch(() => {
-      const type: (new () => IDataEntityFactory<T>) = Factories[result.name];
-      return type ? new type() : null;
+      const type: (new (...args: any[]) => IDataEntityFactory<T>) = Factories[result.name];
+      return type ? Container.resolve(type) : null;
     });
   }
 

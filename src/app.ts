@@ -1,6 +1,6 @@
 import { resolve } from "path";
 import * as semver from 'semver';
-import { Container, ILoggingService, IModuleService, ServiceIdentifiers, IConfigurationService, IClientService, IEventService, Logger, ILifecycle, IDataService } from "@satyrnidae/apdb-api";
+import { Container, ILoggingService, IModuleService, ServiceIdentifiers, IConfigurationService, IClientService, IEventService, Logger, ILifecycle, IDataService, ICommandService } from "@satyrnidae/apdb-api";
 import { sleep, fsa } from '@satyrnidae/apdb-utils';
 import { ConfigurationService } from "./core/services/configuration-service";
 import { LoggingService } from "./core/services/logging-service";
@@ -12,6 +12,7 @@ import { Client } from "discord.js";
 import { DataService } from "./core/services/data-service";
 import { GuildConfiguration } from "./db/entity/guild-configuration";
 import { GuildConfigurationFactory } from "./db/factory/guild-configuration-factory";
+import { CommandService } from "./core/services/command-service";
 
 async function splash(log: Logger): Promise<void> {
   log.info('╔═════════════════════════════════════════════╗');
@@ -21,7 +22,7 @@ async function splash(log: Logger): Promise<void> {
   log.info('║                          ╷─┘    ╲      ▁▁▁  ║');
   log.info('║                           ╲▁   ▁╱     ╱╲ │  ║');
   log.info('║  (c) 2020 Isabel Maskrey    ╱   ╲▁▁▁ ╱  ╲│  ║');
-  log.info('║  All rights reserved       ╱        ╲│  ╱   ║');
+  log.info('║  All rights reserved       ╱        ╲   ╱   ║');
   log.info('║                            │ │ │ ╱     ╱    ║');
   log.info('║                            │ │ │ ╲  ╱▁╱     ║');
   log.info('║                            ╱▁╱▁╱▁╱▁▁╱       ║');
@@ -56,6 +57,7 @@ async function run(): Promise<void> {
   Container.bind<IClientService>(ServiceIdentifiers.Client).to(ClientService);
   Container.bind<IEventService>(ServiceIdentifiers.Event).to(EventService);
   Container.bind<ILoggingService>(ServiceIdentifiers.Logging).to(LoggingService);
+  Container.bind<ICommandService>(ServiceIdentifiers.Command).to(CommandService);
   Container.bind<IModuleService>(ServiceIdentifiers.Module).to(ModuleService);
   Container.bind<IDataService>(ServiceIdentifiers.Data).to(DataService);
 
