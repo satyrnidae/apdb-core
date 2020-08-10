@@ -1,7 +1,7 @@
 import { resolve } from "path";
 import * as semver from 'semver';
 import { Container, ILoggingService, IModuleService, ServiceIdentifiers, IConfigurationService, IClientService, IEventService, Logger, ILifecycle, IDataService } from "@satyrnidae/apdb-api";
-import { sleep, fsa, toOne } from '@satyrnidae/apdb-utils';
+import { sleep, fsa } from '@satyrnidae/apdb-utils';
 import { ConfigurationService } from "./core/services/configuration-service";
 import { LoggingService } from "./core/services/logging-service";
 import { ModuleService } from "./core/services/module-service";
@@ -65,15 +65,7 @@ async function run(): Promise<void> {
   const robot: Robot = Container.resolve(Robot);
   const dataService: DataService = Container.get<IDataService>(ServiceIdentifiers.Data) as DataService;
 
-  dataService.registerFactory(GuildConfiguration, GuildConfigurationFactory);
-
-  try {
-  const test: GuildConfiguration = toOne(await (await dataService.getFactory(GuildConfiguration)).load({id: 'test'}));
-  log.info(JSON.stringify(test));
-  } catch (err) {
-    log.error(err);
-    process.exit();
-  }
+  await dataService.registerFactory(GuildConfiguration, GuildConfigurationFactory);
 
   log.setLogLevel('info');
 

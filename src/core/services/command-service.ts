@@ -1,7 +1,8 @@
 import { injectable, inject } from "inversify";
-import { Command, ICommandService, ServiceIdentifiers, IConfigurationService, ILoggingService, Logger } from "@satyrnidae/apdb-api";
-import { Mutex, OneOrMany } from "@satyrnidae/apdb-utils";
+import { Command, ICommandService, ServiceIdentifiers, IConfigurationService, ILoggingService, Logger, IDataService } from "@satyrnidae/apdb-api";
+import { Mutex, OneOrMany, toOne } from "@satyrnidae/apdb-utils";
 import { Guild } from "discord.js";
+import { GuildConfiguration } from "db/entity/guild-configuration";
 
 const Commands: Command[] = [];
 const CommandMutex: Mutex = new Mutex();
@@ -12,7 +13,8 @@ export class CommandService implements ICommandService {
   private readonly log: Logger;
 
   constructor(@inject(ServiceIdentifiers.Logging) loggingService: ILoggingService,
-    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService) {
+    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService,
+    @inject(ServiceIdentifiers.Data) private readonly dataService: IDataService) {
     this.log = loggingService.getLogger('core');
   }
 
@@ -34,8 +36,8 @@ export class CommandService implements ICommandService {
   public async getCommandPrefix(guild: Guild): Promise<string> {
     let prefix: string = await this.configurationService.getDefaultPrefix();
     if (guild) {
-      // load guild config
-      prefix = '!';
+      const config: GuildConfiguration = toOne(await this.dataService.load(GuildConfiguration, {id: guild.id}, true));
+      return config.commandPrefix;
     }
     return prefix;
   }
