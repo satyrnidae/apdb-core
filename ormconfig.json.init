@@ -16,8 +16,8 @@
     "node_modules/**/dist/db/subscribers/*.js"
   ],
   "cli": {
-    "entitiesDir": "bin/db/entity",
-    "migrationsDir": "bin/db/migrations",
-    "subscribersDir": "bin/db/subscribers"
+    "entitiesDir": "src/db/entity",
+    "migrationsDir": "src/db/migrations",
+    "subscribersDir": "src/db/subscribers"
   }
 }
