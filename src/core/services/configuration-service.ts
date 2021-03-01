@@ -1,6 +1,7 @@
 import { IAppConfiguration, IConfigurationService } from '@satyrnidae/apdb-api';
 import { fsa, Mutex } from '@satyrnidae/apdb-utils';
 import { injectable } from 'inversify';
+import { ColorResolvable } from 'discord.js';
 
 let Config: IAppConfiguration = null;
 const ConfigMutex: Mutex = new Mutex();
@@ -35,6 +36,16 @@ export class ConfigurationService implements IConfigurationService {
     const hearts: string[] = await this.getHearts();
     const index: number = Math.floor(Math.random() * hearts.length);
     return `:${hearts[index]}:`;
+  }
+
+  public async getModuleDirectories(): Promise<string[]> {
+    const config: IAppConfiguration = await this.loadConfig();
+    return config.moduleDirectories;
+  }
+
+  public async getBotEmbedColor(): Promise<ColorResolvable> {
+    const config: IAppConfiguration = await this.loadConfig();
+    return config.botEmbedColor;
   }
 
   private async loadConfig(): Promise<IAppConfiguration> {
