@@ -35,6 +35,7 @@ build/Release
 # Dependency directories
 node_modules/
 jspm_packages/
+apdb_plugins/
 
 # Optional npm cache directory
 .npm
