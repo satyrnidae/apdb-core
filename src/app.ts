@@ -48,18 +48,17 @@ async function run(): Promise<void> {
 
   // Global settings
   (global as any).version = packageInfo.version;
-  (global as any).moduleDirectory = resolve(`${__dirname}/../modules`);
   (global as any).apiVersion = semver.clean((packageInfo.dependencies['@satyrnidae/apdb-api'] as string).replace('^', ''));
   (global as any).configPath = resolve(`${__dirname}/../config.json`);
 
   // Core service bindings
-  Container.bind<IConfigurationService>(ServiceIdentifiers.Configuration).to(ConfigurationService);
-  Container.bind<IClientService>(ServiceIdentifiers.Client).to(ClientService);
-  Container.bind<IEventService>(ServiceIdentifiers.Event).to(EventService);
-  Container.bind<ILoggingService>(ServiceIdentifiers.Logging).to(LoggingService);
-  Container.bind<ICommandService>(ServiceIdentifiers.Command).to(CommandService);
-  Container.bind<IModuleService>(ServiceIdentifiers.Module).to(ModuleService);
-  Container.bind<IDataService>(ServiceIdentifiers.Data).to(DataService);
+  Container.bind<IConfigurationService>(ServiceIdentifiers.Configuration).to(ConfigurationService).inSingletonScope();
+  Container.bind<IClientService>(ServiceIdentifiers.Client).to(ClientService).inSingletonScope();
+  Container.bind<IEventService>(ServiceIdentifiers.Event).to(EventService).inSingletonScope();
+  Container.bind<ILoggingService>(ServiceIdentifiers.Logging).to(LoggingService).inSingletonScope();
+  Container.bind<ICommandService>(ServiceIdentifiers.Command).to(CommandService).inSingletonScope();
+  Container.bind<IModuleService>(ServiceIdentifiers.Module).to(ModuleService).inSingletonScope();
+  Container.bind<IDataService>(ServiceIdentifiers.Data).to(DataService).inSingletonScope();
 
   // Set up values for initialization
   const log: Logger = Container.get<ILoggingService>(ServiceIdentifiers.Logging).getLogger('core');
@@ -69,17 +68,18 @@ async function run(): Promise<void> {
 
   await dataService.registerFactory(GuildConfiguration, GuildConfigurationFactory);
 
-  log.setLogLevel('info');
+  log.setLogLevel('trace');
 
   client.on('disconnect', () => log.info('Client disconnected.'));
   client.on('ready', () => log.info('Client ready!'));
 
   process.on('SIGINT', function () {
-    log.trace("Caught interrupt signal");
-    client.destroy().finally(() => {
-      log.info('Exiting...')
-      process.exit();
-    });
+    log.trace("Caught interrupt signal!");
+    process.exit();
+  });
+  process.on("exit", () => {
+    client.destroy();
+    log.info('Exiting...');
   });
 
   await splash(log);
@@ -90,4 +90,4 @@ async function run(): Promise<void> {
   }
 }
 
-run().catch(process.exit);
+run();
