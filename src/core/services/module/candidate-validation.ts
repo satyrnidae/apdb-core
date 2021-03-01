@@ -12,12 +12,17 @@ type File = {
   size: number
 }
 
+export type ModuleCandidate = {
+  Name: string,
+  Directory: string
+}
+
 /**
  * Makes sure a candidate file is actually a zipped folder, and not some other thing.
  * @param candidateFile The candidate file name.
  * @param stats The candidate file stats.
  */
-async function isZipCandidate(candidateFile: string, stats: Stats): Promise<File> {
+async function isZipCandidate(candidate: ModuleCandidate, stats: Stats): Promise<File> {
   // If the stats doesn't refer to a file, it can't refer to a zipped folder
   if (!stats.isFile()) {
     throw new Error('The candidate path points to a device, not a file.');
@@ -29,7 +34,7 @@ async function isZipCandidate(candidateFile: string, stats: Stats): Promise<File
   }
 
   // try to load zip file
-  const candidatePath: string = `${(global as any).moduleDirectory}/${candidateFile}`;
+  const candidatePath: string = `${candidate.Directory}/${candidate.Name}`;
   const fd = await fsa.openAsync(candidatePath, 'r');
   const buffer: Buffer = Buffer.alloc(stats.size);
   await fsa.readAsync(fd, buffer, 0, stats.size, 0);
@@ -58,13 +63,13 @@ async function readPackageJson(buffer: Buffer): Promise<IModuleInfo> {
   };
 
   const apiVersion: string = dependencies['@satyrnidae/apdb-api'];
-  if (!satisfies((global as any).apiVersion, apiVersion)) {
-    throw new Error(`The module was built with an incompatible version of the API (${(global as any).apiVersion} does not satisfy ${apiVersion})`);
-  }
-
   const packageModuleInfo: IModulePackageDetails = packageInfo['apdb-module'];
   if (!packageModuleInfo) {
-    throw new Error('The node module did not specify required apdb-module section.');
+    throw new Error(`The module "${packageInfo.name}" is not a valid plugin: missing apdb-module section in package.info`);
+  }
+
+  if (!satisfies((global as any).apiVersion, apiVersion)) {
+    throw new Error(`The module was built with an incompatible version of the API (${(global as any).apiVersion} does not satisfy ${apiVersion})`);
   }
 
   let packageAuthors: string[] = [];
@@ -102,18 +107,18 @@ async function readZipPackageJSON(zippedFolder: AdmZip): Promise<IModuleInfo> {
   return readPackageJson(packageJsonData);
 }
 
-async function getFileCandidate(candidateFile: string, stats: Stats): Promise<IModuleInfo> {
+async function getFileCandidate(candidate: ModuleCandidate, stats: Stats): Promise<IModuleInfo> {
   let fd: number = -1;
   let result: IModuleInfo = null;
   try {
-    const isZipResult: File = await isZipCandidate(candidateFile, stats);
+    const isZipResult: File = await isZipCandidate(candidate, stats);
     fd = isZipResult.fd;
 
     // Get the module info from the package zip... but we aren't done yet.
     const zippedFolder: AdmZip = new AdmZip(isZipResult.buffer);
     result = await readZipPackageJSON(zippedFolder);
-    result.details.path = `${(global as any).moduleDirectory}/${candidateFile}`;
-    result.details.containerName = candidateFile;
+    result.details.path = `${candidate.Directory}/${candidate.Name}`;
+    result.details.containerName = candidate.Name;
 
     const mainFile: IZipEntry = zippedFolder.getEntry(result.details.entryPoint);
     if (!mainFile) {
@@ -127,8 +132,8 @@ async function getFileCandidate(candidateFile: string, stats: Stats): Promise<IM
   }
 }
 
-async function getDirectoryCandidate(candidateFile: string, stats: Stats): Promise<IModuleInfo> {
-  const candidatePath: string = `${(global as any).moduleDirectory}/${candidateFile}`;
+async function getDirectoryCandidate(candidate: ModuleCandidate, stats: Stats): Promise<IModuleInfo> {
+  const candidatePath: string = `${candidate.Directory}/${candidate.Name}`;
   const packageJsonExistsTask: Promise<boolean> = fsa.existsAsync(`${candidatePath}/package.json`);
   if (!(await packageJsonExistsTask)) {
     throw new Error('No package.json file exists.');
@@ -137,20 +142,20 @@ async function getDirectoryCandidate(candidateFile: string, stats: Stats): Promi
   const packageJson: Buffer = await fsa.readFileAsync(`${candidatePath}/package.json`);
   const result = await readPackageJson(packageJson);
   result.details.path = candidatePath;
-  result.details.containerName = candidateFile;
+  result.details.containerName = candidate.Name;
 
   return result;
 }
 
 export namespace Candidates {
-  export async function validateCandidate(candidateFile: string): Promise<IModuleInfo> {
-    const candidatePath: string = `${(global as any).moduleDirectory}/${candidateFile}`;
+  export async function validateCandidate(candidate: ModuleCandidate): Promise<IModuleInfo> {
+    const candidatePath: string = `${candidate.Directory}/${candidate.Name}`;
     const stats: Stats = await fsa.lstatAsync(candidatePath);
 
     // Make sure we're dealing with a directory. If not hand off to the subloader to try to extract the zipped module.
     if (!stats.isDirectory()) {
-      return getFileCandidate(candidateFile, stats);
+      return getFileCandidate(candidate, stats);
     }
-    return getDirectoryCandidate(candidateFile, stats);
+    return getDirectoryCandidate(candidate, stats);
   }
 }

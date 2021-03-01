@@ -1,11 +1,14 @@
 import { injectable, inject } from 'inversify';
 import { Stats } from 'fs';
-import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, IModuleInfo, IEventService, EventHandler, ICommandService, Command } from '@satyrnidae/apdb-api';
+import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, IModuleInfo, IEventService, EventHandler, ICommandService, Command, IConfigurationService } from '@satyrnidae/apdb-api';
 import { checkDependenciesAsync, fsa, Mutex, forEachAsync, OneOrMany, toOneOrMany, Resolve, Reject } from '@satyrnidae/apdb-utils';
-import { Candidates } from './module/candidate-validation';
+import { Candidates, ModuleCandidate } from './module/candidate-validation';
 import * as tmp from 'tmp-promise';
 import * as semver from 'semver';
+import * as fs from 'fs'
+import { dirname } from 'path';
 import AdmZip from 'adm-zip';
+import { CoreModule } from '../module/core-module';
 
 tmp.setGracefulCleanup();
 
@@ -18,7 +21,8 @@ export class ModuleService implements IModuleService {
 
   constructor(@inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService,
     @inject(ServiceIdentifiers.Event) private readonly eventService: IEventService,
-    @inject(ServiceIdentifiers.Command) private readonly commandService: ICommandService) {
+    @inject(ServiceIdentifiers.Command) private readonly commandService: ICommandService,
+    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService) {
     this.log = loggingService.getLogger('core');
   }
 
@@ -70,30 +74,55 @@ export class ModuleService implements IModuleService {
   }
 
   private async loadModules(): Promise<void> {
-    this.log.info(`Loading modules from directory '${(global as any).moduleDirectory}'`);
 
-    const candidateFiles: string[] = await fsa.readdirAsync((global as any).moduleDirectory);
-    const modules: IModuleInfo[] = await this.verifyCandidates(...candidateFiles);
+    await ModulesMutex.dispatch(() => Modules.push(new CoreModule(this.log)));
+
+    const moduleDirectories: string[] = await this.configurationService.getModuleDirectories();
+
+    let modules: IModuleInfo[] = [];
+
+    await forEachAsync(moduleDirectories, async(moduleDirectory: string): Promise<void> => {
+      this.log.info(`Loading modules from directory '${moduleDirectory}'`);
+
+      try {
+        if (await fsa.existsAsync(moduleDirectory)) {
+          const candidateFiles: string[] = await fsa.readdirAsync(moduleDirectory);
+          modules.push(...(await this.verifyCandidates(...candidateFiles.map(file => <ModuleCandidate>{Directory: moduleDirectory, Name: file}))))
+        } else {
+          this.log.info(`Module directory ${moduleDirectory} was not found. Creating...`)
+          fs.mkdir(moduleDirectory, (err: NodeJS.ErrnoException) => {
+            if (err) {
+              this.log.error(`Error while creating module directory: ${err}`);
+            } else {
+              this.log.info('Module directory created successfully.');
+            }
+          });
+        }
+      } catch (err) {
+        this.log.error(err);
+      }
+    });
+
     return forEachAsync(modules, async (module: IModuleInfo): Promise<void> => this.loadModule(module));
   }
 
-  private async verifyCandidates(...candidateFiles: string[]): Promise<IModuleInfo[]> {
-    const candidates: IModuleInfo[] = [];
+  private async verifyCandidates(...candidates: ModuleCandidate[]): Promise<IModuleInfo[]> {
+    const modules: IModuleInfo[] = [];
     // Validate
-    await forEachAsync(candidateFiles, async (candidateFile: string): Promise<void> => {
+    await forEachAsync(candidates, async (candidate: ModuleCandidate): Promise<void> => {
       try {
-        const result = await Candidates.validateCandidate(candidateFile);
+        const result = await Candidates.validateCandidate(candidate);
         if (result) {
-          candidates.push(result);
+          modules.push(result);
         }
       } catch (ex) {
-        this.log.warn(`Unable to load module from ${candidateFile}.`);
+        this.log.debug(`Unable to load module from ${candidate.Directory}/${candidate.Name}.`);
         this.log.trace(ex);
       }
     });
 
     // Sort by id and version preference
-    candidates.sort((a, b) => {
+    modules.sort((a, b) => {
       const compare: number = a.id.localeCompare(b.id);
       if (compare === 0) {
         return -(semver.compare(a.version, b.version));
@@ -101,15 +130,15 @@ export class ModuleService implements IModuleService {
       return -compare;
     });
 
-    // Dedupe
-    const dedupe: IModuleInfo[] = Array.from(new Set(candidates.map(c => c.id)))
+    // De-duplicated list
+    const deDuplicated: IModuleInfo[] = Array.from(new Set(modules.map(c => c.id)))
       .map(id => {
-        const candidate = candidates.find(c => c.id === id);
+        const candidate = modules.find(c => c.id === id);
         this.log.info(`Loading module ${candidate.id}@${candidate.version} from ${candidate.details.path}.`);
         return candidate;
       });
 
-    return dedupe;
+    return deDuplicated;
   }
 
   private async registerDependencies(): Promise<void> {
@@ -128,7 +157,7 @@ export class ModuleService implements IModuleService {
             discardDescriptor: true,
             template: `tmp-XXXXXX`,
             unsafeCleanup: true,
-            tmpdir: (global as any).moduleDirectory
+            tmpdir: dirname(moduleInfo.details.path)
           });
           modulePath = directory.path;
 
