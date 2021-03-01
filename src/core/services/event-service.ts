@@ -2,7 +2,7 @@ import { injectable, inject } from "inversify";
 import { IEventService, EventHandler, ServiceIdentifiers } from "@satyrnidae/apdb-api";
 import { EventHandlerFunction } from "@satyrnidae/apdb-utils";
 import { ClientService } from "./client-service";
-import { Client } from "discord.js";
+import { Client, ClientEvents } from "discord.js";
 
 @injectable()
 export class EventService implements IEventService {
@@ -21,7 +21,7 @@ export class EventService implements IEventService {
     this.client.addListener(event, listener);
   }
 
-  public on(event: string, listener: Function): void {
+  public on<K extends keyof ClientEvents>(event: K, listener: (...args: ClientEvents[K]) => void): void {
     this.client.on(event, listener);
   }
 }
