@@ -1,13 +1,16 @@
 import { GuildConfiguration } from "../entity/guild-configuration";
-import { IDataEntityFactory, ServiceIdentifiers, IDataService, IConfigurationService } from "@satyrnidae/apdb-api";
+import { IDataEntityFactory, ServiceIdentifiers, IDataService, IConfigurationService, lazyInject, IModuleService } from "@satyrnidae/apdb-api";
 import { OneOrMany } from "@satyrnidae/apdb-utils";
 import { Repository } from "typeorm";
-import { inject } from "inversify";
 
 export class GuildConfigurationFactory implements IDataEntityFactory<GuildConfiguration> {
 
-  constructor(@inject(ServiceIdentifiers.Data) private readonly dataService: IDataService,
-    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService) {}
+  @lazyInject(ServiceIdentifiers.Data)
+  private readonly dataService!: IDataService;
+  @lazyInject(ServiceIdentifiers.Configuration)
+  private readonly configurationService!: IConfigurationService;
+  @lazyInject(ServiceIdentifiers.Module)
+  private readonly moduleService!: IModuleService;
 
   public async load(args: Partial<GuildConfiguration>, save: boolean = false): Promise<OneOrMany<GuildConfiguration>> {
     const repository: Repository<GuildConfiguration> = await this.getRepository();
@@ -22,6 +25,7 @@ export class GuildConfigurationFactory implements IDataEntityFactory<GuildConfig
       guildConfiguration.commandPrefix = args.commandPrefix || await this.configurationService.getDefaultPrefix();
       guildConfiguration.welcomeMessageSent = args.welcomeMessageSent;
       guildConfiguration.id = args.id;
+
       if (save) {
         await guildConfiguration.save();
       }
@@ -33,5 +37,4 @@ export class GuildConfigurationFactory implements IDataEntityFactory<GuildConfig
   public async getRepository(): Promise<Repository<GuildConfiguration>> {
     return this.dataService.getRepository(GuildConfiguration);
   }
-
 }
