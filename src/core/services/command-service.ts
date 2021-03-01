@@ -1,6 +1,6 @@
 import { injectable, inject } from "inversify";
 import { Command, ICommandService, ServiceIdentifiers, IConfigurationService, ILoggingService, Logger, IDataService } from "@satyrnidae/apdb-api";
-import { Mutex, OneOrMany, toOne } from "@satyrnidae/apdb-utils";
+import { Mutex, OneOrMany, toOne, toMany } from "@satyrnidae/apdb-utils";
 import { Guild } from "discord.js";
 import { GuildConfiguration } from "../../db/entity/guild-configuration";
 
@@ -18,25 +18,33 @@ export class CommandService implements ICommandService {
     this.log = loggingService.getLogger('core');
   }
 
-  public async get(command: string, moduleId?: string): Promise<OneOrMany<Command>> {
-    if (moduleId) {
-      return CommandMutex.dispatch(() => Commands.filter(entry => entry.moduleId === moduleId && entry.command === command));
-    }
-    return CommandMutex.dispatch(() => Commands.filter(entry => entry.command === command)
-    );
+  public async get(command: string, moduleId?: string, guild?: Guild): Promise<OneOrMany<Command>> {
+    const commands: Command[] = toMany(await this.getAll(moduleId, guild));
+
+    return commands.filter(entry => entry.command === command);
   }
 
-  public async getAll(moduleId?: string): Promise<OneOrMany<Command>> {
+  public async getAll(moduleId?: string, guild?: Guild): Promise<OneOrMany<Command>> {
+    let commands: Command[] = await CommandMutex.dispatch(() => Commands);
+
     if (moduleId) {
-      return CommandMutex.dispatch(() => Commands.filter(entry => entry.moduleId === moduleId));
+      commands = commands.filter(entry => entry.moduleId === moduleId);
     }
-    return CommandMutex.dispatch(() => Commands);
+
+    if (guild) {
+      const guildConfiguration: GuildConfiguration = toOne(await this.dataService.load<GuildConfiguration>(GuildConfiguration, { id: guild.id }, true));
+      const disabledModules: string[] = guildConfiguration.moduleOptions ? guildConfiguration.moduleOptions.filter(value => value.disabled).map(value => value.moduleId) : [];
+
+      commands = commands.filter(entry => !disabledModules.includes(entry.moduleId));
+    }
+
+    return commands;
   }
 
   public async getCommandPrefix(guild: Guild): Promise<string> {
-    let prefix: string = await this.configurationService.getDefaultPrefix();
+    const prefix: string = await this.configurationService.getDefaultPrefix();
     if (guild) {
-      const config: GuildConfiguration = toOne(await this.dataService.load(GuildConfiguration, {id: guild.id}, true));
+      const config: GuildConfiguration = toOne(await this.dataService.load(GuildConfiguration, { id: guild.id }, true));
       return config.commandPrefix;
     }
     return prefix;
