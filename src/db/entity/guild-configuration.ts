@@ -2,7 +2,7 @@ import { Entity, Repository, Column, PrimaryColumn, OneToMany } from "typeorm";
 import { DataEntity, lazyInject, ServiceIdentifiers } from "@satyrnidae/apdb-api";
 import { DataService } from "../../core/services/data-service";
 import { ModuleOptions } from "./module-options";
-@Entity({name: 'guild_configuration', schema: 'core'})
+@Entity({name: 'core_guildconfiguration', schema: 'core'})
 export class GuildConfiguration extends DataEntity {
   @lazyInject(ServiceIdentifiers.Data)
   private readonly dataService!: DataService;
@@ -24,6 +24,9 @@ export class GuildConfiguration extends DataEntity {
 
   @Column({default: false})
   welcomeMessageSent: boolean;
+
+  @Column({default: false})
+  hasDeletedMessage: boolean;
 
   @Column({default: 'en'})
   language: string;

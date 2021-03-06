@@ -1,8 +1,9 @@
-import { Entity, Repository, PrimaryColumn, Column, ManyToOne } from "typeorm";
+import { Entity, Repository, PrimaryColumn, Column, ManyToOne, OneToMany } from "typeorm";
 import { lazyInject, ServiceIdentifiers, DataEntity, IDataService } from "@satyrnidae/apdb-api";
 import { GuildConfiguration } from "./guild-configuration";
+import { CommandOptions } from './command-options';
 
-@Entity({name: 'module_options', schema: 'core'})
+@Entity({name: 'core_guildmoduleoptions', schema: 'core'})
 export class ModuleOptions extends DataEntity {
   @lazyInject(ServiceIdentifiers.Data)
   private readonly dataService!: IDataService;
@@ -27,4 +28,7 @@ export class ModuleOptions extends DataEntity {
 
   @Column({nullable: false, default: false})
   disabled: boolean;
+
+  @OneToMany(() => CommandOptions, commandOptions => commandOptions.module)
+  commands: CommandOptions[];
 }
