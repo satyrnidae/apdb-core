@@ -13,7 +13,10 @@ export class EventService implements IEventService {
     this.client = clientService.getClient();
   }
 
-  public registerEvent(event: EventHandler): void {
+  public registerEvent<E extends keyof ClientEvents>(event: EventHandler<E>): void {
+    if(event.handleRaw !== EventHandler.prototype.handleRaw) {
+      this.client.on('raw', event.handleRaw.bind(event));
+    }
     this.client.addListener(event.event, event.handler.bind(event));
   }
 
