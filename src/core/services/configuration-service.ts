@@ -1,51 +1,16 @@
 import { IAppConfiguration, IConfigurationService } from '@satyrnidae/apdb-api';
 import { fsa, Mutex } from '@satyrnidae/apdb-utils';
 import { injectable } from 'inversify';
-import { ColorResolvable } from 'discord.js';
 
 let Config: IAppConfiguration = null;
 const ConfigMutex: Mutex = new Mutex();
 
 @injectable()
 export class ConfigurationService implements IConfigurationService {
-  public async getToken(): Promise<string> {
-    const config: IAppConfiguration = await this.loadConfig();
-    return config.token;
-  }
-  public async getDefaultPrefix(): Promise<string> {
-    const config: IAppConfiguration = await this.loadConfig();
-    return config.defaultPrefix;
-  }
-  public async getDefaultNickname(): Promise<string> {
-    const config: IAppConfiguration = await this.loadConfig();
-    return config.defaultNickname;
-  }
-  public async getHearts(): Promise<string[]> {
-    const config: IAppConfiguration = await this.loadConfig();
-    return config.hearts;
-  }
-  public async shouldShowWelcomeMessage(): Promise<boolean> {
-    const config: IAppConfiguration = await this.loadConfig();
-    return config.showWelcomeMessage;
-  }
-  public async isDeveloperMode(): Promise<boolean> {
-    const config: IAppConfiguration = await this.loadConfig();
-    return config.developerMode;
-  }
-  public async getRandomHeart(): Promise<string> {
-    const hearts: string[] = await this.getHearts();
-    const index: number = Math.floor(Math.random() * hearts.length);
-    return `:${hearts[index]}:`;
-  }
 
-  public async getModuleDirectories(): Promise<string[]> {
+  public async get<E extends keyof IAppConfiguration>(key: E): Promise<IAppConfiguration[E]> {
     const config: IAppConfiguration = await this.loadConfig();
-    return config.moduleDirectories;
-  }
-
-  public async getBotEmbedColor(): Promise<ColorResolvable> {
-    const config: IAppConfiguration = await this.loadConfig();
-    return config.botEmbedColor;
+    return config[key];
   }
 
   private async loadConfig(): Promise<IAppConfiguration> {
