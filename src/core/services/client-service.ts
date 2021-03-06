@@ -10,7 +10,7 @@ export class ClientService implements IClientService {
   constructor(@inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService) { }
 
   public async login(): Promise<string> {
-    return TheClient.login(await this.configurationService.getToken());
+    return TheClient.login(await this.configurationService.get('token'));
   }
 
   public getClient(): Client {
