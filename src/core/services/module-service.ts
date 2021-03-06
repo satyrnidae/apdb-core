@@ -1,7 +1,7 @@
 import { injectable, inject } from 'inversify';
 import { Stats } from 'fs';
-import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, IModuleInfo, IEventService, EventHandler, ICommandService, Command, IConfigurationService } from '@satyrnidae/apdb-api';
-import { checkDependenciesAsync, fsa, Mutex, forEachAsync, OneOrMany, toOneOrMany, Resolve, Reject } from '@satyrnidae/apdb-utils';
+import { IModuleService, Logger, Module, ServiceIdentifiers, ILoggingService, IModuleInfo, IEventService, EventHandler, ICommandService, Command, IConfigurationService, IDataService } from '@satyrnidae/apdb-api';
+import { checkDependenciesAsync, fsa, Mutex, forEachAsync, OneOrMany, toOneOrMany, Resolve, Reject, toMany, toOne } from '@satyrnidae/apdb-utils';
 import { Candidates, ModuleCandidate } from './module/candidate-validation';
 import * as tmp from 'tmp-promise';
 import * as semver from 'semver';
@@ -9,6 +9,8 @@ import * as fs from 'fs'
 import { dirname } from 'path';
 import AdmZip from 'adm-zip';
 import { CoreModule } from '../module/core-module';
+import { Guild } from 'discord.js';
+import { GuildConfiguration } from '../../db/entity/guild-configuration';
 
 tmp.setGracefulCleanup();
 
@@ -22,16 +24,15 @@ export class ModuleService implements IModuleService {
   constructor(@inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService,
     @inject(ServiceIdentifiers.Event) private readonly eventService: IEventService,
     @inject(ServiceIdentifiers.Command) private readonly commandService: ICommandService,
-    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService) {
+    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService,
+    @inject(ServiceIdentifiers.Data) private readonly dataService: IDataService) {
     this.log = loggingService.getLogger('core');
   }
 
   public async preInitialize(): Promise<void> {
-    const loadModulesTask: Promise<void> = this.loadModules()
-      .then(async (): Promise<void> => this.registerDependencies())
-      .then(async (): Promise<void> => forEachAsync(Modules, async (module: Module): Promise<void> => module.preInitialize()));
-
-    return loadModulesTask;
+    return this.loadModules()
+    .then(async (): Promise<void> => this.registerDependencies())
+    .then(async (): Promise<void> => forEachAsync(Modules, async (module: Module): Promise<void> => module.preInitialize()));
   }
 
   public async initialize(): Promise<void> {
@@ -43,7 +44,7 @@ export class ModuleService implements IModuleService {
       }
 
       if (module.events && module.events.length) {
-        module.events.forEach((event: EventHandler) => this.eventService.registerEvent(event));
+        module.events.forEach((event: EventHandler<any>) => this.eventService.registerEvent(event));
       }
     });
   }
@@ -52,21 +53,31 @@ export class ModuleService implements IModuleService {
     return forEachAsync(Modules, async (module: Module) => module.postInitialize());
   }
 
-  public getAllModules(): OneOrMany<Module> {
-    return toOneOrMany(new Array(...Modules));
+  public async getAllModules(guild?: Guild): Promise<OneOrMany<Module>> {
+    let modules: Module[] = toMany(new Array(...Modules));
+
+    if (guild) {
+      const guildConfiguration: GuildConfiguration = toOne(await this.dataService.load<GuildConfiguration>(GuildConfiguration, { id: guild.id }, true));
+      modules = modules.filter(module => guildConfiguration && guildConfiguration.moduleOptions
+        ? guildConfiguration.moduleOptions.filter(value => !(value.disabled && value.moduleId === module.moduleInfo.id)).length : true);
+    }
+
+    return modules;
   }
 
-  public getModuleById(moduleId: string): Module {
-    const filteredModules: Module[] = Modules.filter((module: Module) => module.moduleInfo.id === moduleId);
-    return filteredModules && filteredModules.length ? filteredModules[0] : null;
+  public async getModuleById(moduleId: string, guild?: Guild): Promise<Module> {
+    const allModules: Module[] = toMany(await this.getAllModules(guild));
+    const filteredModules: Module[] = allModules.filter((module: Module) => module.moduleInfo.id === moduleId);
+    return toOne(filteredModules);
   }
 
-  public getModulesByName(moduleName: string): OneOrMany<Module> {
-    return Modules.filter((module: Module) => module.moduleInfo.name === moduleName);
+  public async getModulesByName(moduleName: string, guild?: Guild): Promise<OneOrMany<Module>> {
+    const allModules: Module[] = toMany(await this.getAllModules(guild))
+    return allModules.filter((module: Module) => module.moduleInfo.name === moduleName);
   }
 
-  public getModulesByIdOrName(moduleIdOrName: string): OneOrMany<Module> {
-    const module: Module = this.getModuleById(moduleIdOrName);
+  public async getModulesByIdOrName(moduleIdOrName: string, guild?: Guild): Promise<OneOrMany<Module>> {
+    const module: Module = await this.getModuleById(moduleIdOrName);
     if (!module) {
       return this.getModulesByName(moduleIdOrName);
     }
@@ -77,9 +88,9 @@ export class ModuleService implements IModuleService {
 
     await ModulesMutex.dispatch(() => Modules.push(new CoreModule(this.log)));
 
-    const moduleDirectories: string[] = await this.configurationService.getModuleDirectories();
+    const moduleDirectories: string[] = toMany(await this.configurationService.get('moduleDirectories'));
 
-    let modules: IModuleInfo[] = [];
+    const modules: IModuleInfo[] = [];
 
     await forEachAsync(moduleDirectories, async(moduleDirectory: string): Promise<void> => {
       this.log.info(`Loading modules from directory '${moduleDirectory}'`);
