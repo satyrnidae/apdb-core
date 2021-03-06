@@ -3,6 +3,7 @@ import { Command, ICommandService, ServiceIdentifiers, IConfigurationService, IL
 import { Mutex, OneOrMany, toOne, toMany } from "@satyrnidae/apdb-utils";
 import { Guild } from "discord.js";
 import { GuildConfiguration } from "../../db/entity/guild-configuration";
+import { CommandOptions } from "../../db/entity/command-options";
 
 const Commands: Command[] = [];
 const CommandMutex: Mutex = new Mutex();
@@ -34,15 +35,18 @@ export class CommandService implements ICommandService {
     if (guild) {
       const guildConfiguration: GuildConfiguration = toOne(await this.dataService.load<GuildConfiguration>(GuildConfiguration, { id: guild.id }, true));
       const disabledModules: string[] = guildConfiguration.moduleOptions ? guildConfiguration.moduleOptions.filter(value => value.disabled).map(value => value.moduleId) : [];
+      const disabledCommands: CommandOptions[] = guildConfiguration.moduleOptions
+        ? guildConfiguration.moduleOptions.filter(value => value && !value.disabled).map(value => value.commands).flat().filter(value => value.disabled) : [];
 
-      commands = commands.filter(entry => !disabledModules.includes(entry.moduleId));
+      commands = commands.filter(entry => !disabledModules.includes(entry.moduleId)
+        && !(disabledCommands.filter(value => value.command === entry.command && value.module.moduleId === entry.moduleId).length));
     }
 
     return commands;
   }
 
   public async getCommandPrefix(guild: Guild): Promise<string> {
-    const prefix: string = await this.configurationService.getDefaultPrefix();
+    const prefix: string = await this.configurationService.get('defaultPrefix');
     if (guild) {
       const config: GuildConfiguration = toOne(await this.dataService.load(GuildConfiguration, { id: guild.id }, true));
       return config.commandPrefix;
