@@ -1,13 +1,11 @@
 import { EventHandler, ServiceIdentifiers, IClientService, IEventService, ILoggingService, lazyInject, Logger } from "@satyrnidae/apdb-api";
-import { MessageService } from "../services/message-service";
+import { CoreMessageService } from "../services/core-message-service";
 import { Client } from "discord.js";
 import { forEachAsync } from "@satyrnidae/apdb-utils";
 
-export class ReadyHandler extends EventHandler {
-  public readonly event: string = 'ready';
-
-  @lazyInject(MessageService)
-  private readonly messageService!: MessageService;
+export class ReadyHandler extends EventHandler<'ready'> {
+  @lazyInject(CoreMessageService)
+  private readonly messageService!: CoreMessageService;
 
   @lazyInject(ServiceIdentifiers.Client)
   private readonly clientService!: IClientService;
@@ -17,6 +15,10 @@ export class ReadyHandler extends EventHandler {
 
   @lazyInject(ServiceIdentifiers.Logging)
   private readonly loggingService!: ILoggingService;
+
+  constructor(moduleId: string) {
+    super('ready', moduleId);
+  }
 
   public async handler(): Promise<void> {
     const log: Logger = this.loggingService.getLogger('core');

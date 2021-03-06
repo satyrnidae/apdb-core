@@ -1,14 +1,11 @@
-import { EventHandler, lazyInject, ServiceIdentifiers, IConfigurationService, ICommandService, Command, Logger, ILoggingService } from "@satyrnidae/apdb-api";
-import { MessageService } from "../services/message-service";
+import { lazyInject, ServiceIdentifiers, IConfigurationService, ICommandService, Command, Logger, ILoggingService, MessageEventHandler, IMessageService } from "@satyrnidae/apdb-api";
+import { CoreMessageService } from "../services/core-message-service";
 import { parse } from 'discord-command-parser';
 import { Message } from "discord.js";
 import { toOne } from "@satyrnidae/apdb-utils";
 import yparser, { Arguments } from 'yargs-parser';
 
-export class CommandHandler extends EventHandler {
-
-  // This handler parses "message" events.
-  public event = 'message';
+export class CommandHandler extends MessageEventHandler {
 
   @lazyInject(ServiceIdentifiers.Configuration)
   private readonly configurationService!: IConfigurationService;
@@ -16,11 +13,17 @@ export class CommandHandler extends EventHandler {
   @lazyInject(ServiceIdentifiers.Command)
   private readonly commandService!: ICommandService;
 
-  @lazyInject(MessageService)
-  private readonly messageService!: MessageService;
+  @lazyInject(CoreMessageService)
+  private readonly coreMessageService!: CoreMessageService;
+
+  @lazyInject(ServiceIdentifiers.Message)
+  private readonly messageService!: IMessageService;
 
   @lazyInject(ServiceIdentifiers.Logging)
   private readonly loggingService!: ILoggingService;
+  constructor(moduleId: string) {
+    super(moduleId);
+  }
 
   /**
    * Checks the inbound message for a command and delegates accordingly
@@ -35,7 +38,7 @@ export class CommandHandler extends EventHandler {
     let parsedMessage = parse(message, prefix);
 
     if (!parsedMessage.success) {
-      prefix = await this.configurationService.getDefaultPrefix();
+      prefix = await this.configurationService.get('defaultPrefix');
       parsedMessage = parse(message, prefix);
       if (!parsedMessage.success || parsedMessage.command !== 'help') {
         return;
@@ -90,7 +93,7 @@ export class CommandHandler extends EventHandler {
       await command.run(message, args);
     } catch (err) {
       log.error(err);
-      message.reply('My apologies, I couldn\'t execute that command for some reason!');
+      this.messageService.reply(message, 'My apologies, I couldn\'t execute that command for some reason!');
     }
   }
 }

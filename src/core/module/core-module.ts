@@ -1,13 +1,14 @@
 import { Module, Logger, Container, Command, EventHandler } from "@satyrnidae/apdb-api";
-import { MessageService } from "./services/message-service";
+import { CoreMessageService } from "./services/core-message-service";
 import { ReadyHandler } from "./events/ready-handler";
 import { CommandHandler } from "./events/command-handler";
 import { HelpCommand } from "./commands/help-command";
+import { DeleteReactionHandler } from "./events/delete-reaction-handler";
 
 export class CoreModule extends Module {
 
   private readonly coreCommands: Command[] = [];
-  private readonly coreEvents: EventHandler[] = [];
+  private readonly coreEvents: EventHandler<any>[] = [];
 
   constructor(log: Logger) {
     super({
@@ -27,7 +28,7 @@ export class CoreModule extends Module {
   }
 
   public async registerDependencies(): Promise<void> {
-    Container.bind(MessageService).toSelf();
+    Container.bind(CoreMessageService).toSelf();
   }
 
   public async preInitialize(): Promise<void> {
@@ -36,7 +37,8 @@ export class CoreModule extends Module {
     ]);
     this.events.push(...[
       new ReadyHandler('core'),
-      new CommandHandler('core')
+      new CommandHandler('core'),
+      new DeleteReactionHandler('core')
     ]);
   }
 
@@ -50,7 +52,7 @@ export class CoreModule extends Module {
     return this.coreCommands;
   }
 
-  get events(): EventHandler[] {
+  get events(): EventHandler<any>[] {
     return this.coreEvents;
   }
 }
