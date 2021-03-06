@@ -1,0 +1,48 @@
+{
+  "token": "",
+  "defaultPrefix": "!",
+  "defaultNickname": "",
+  "showWelcomeMessage": true,
+  "logLevel": "info",
+  "embedColor": "#7289da",
+  "moduleDirectories": [
+    "node_modules",
+    "apdb_plugins"
+  ],
+  "hearts": [
+    "❤",
+    "🧡",
+    "💛",
+    "💚",
+    "💙",
+    "💜",
+    "🤎",
+    "🖤",
+    "🤍",
+    "❣",
+    "💕",
+    "💞",
+    "💓",
+    "💗",
+    "💖",
+    "💘",
+    "💝",
+    "💟",
+    "♥"
+  ],
+  "startupMessages": [
+    "Reticulating splines",
+    "Revving up those fryers",
+    "It's time to D-D-D-D-DDDD-DUEL",
+    "Constructing more pylons",
+    "Waking up from a 40 year nap",
+    "wait what am i doing again",
+    "That's a lot of damage",
+    "How did i get here?",
+    "It only gets more insanerer",
+    "How's that for a sandwich",
+    "Building a new bot",
+    "wait did i crash",
+    "Let's get going then"
+  ]
+}

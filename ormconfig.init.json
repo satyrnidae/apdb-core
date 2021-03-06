@@ -1,0 +1,23 @@
+{
+  "type": "sqlite",
+  "database": "sqlite3.db",
+  "synchronize": true,
+  "logging": false,
+  "entities": [
+    "bin/db/entity/*.js",
+    "node_modules/**/dist/db/entity/*.js"
+  ],
+  "migrations": [
+    "bin/db/migrations/*.js",
+    "node_modules/**/dist/db/migrations/*.js"
+  ],
+  "subscribers": [
+    "bin/db/subscribers/*.js",
+    "node_modules/**/dist/db/subscribers/*.js"
+  ],
+  "cli": {
+    "entitiesDir": "src/db/entity",
+    "migrationsDir": "src/db/migrations",
+    "subscribersDir": "src/db/subscribers"
+  }
+}
