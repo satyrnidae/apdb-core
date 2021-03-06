@@ -1,11 +1,11 @@
 import { injectable, inject } from "inversify";
-import { ServiceIdentifiers, Logger, ILoggingService, IConfigurationService, IClientService, IDataService } from "@satyrnidae/apdb-api";
+import { ServiceIdentifiers, Logger, ILoggingService, IConfigurationService, IClientService, IDataService, IMessageService } from "@satyrnidae/apdb-api";
 import { Guild, Client, GuildMember, TextChannel, Message } from "discord.js";
 import { GuildConfiguration } from "../../../db/entity/guild-configuration";
 import { toOne, OneOrMany } from "@satyrnidae/apdb-utils";
 
 @injectable()
-export class MessageService {
+export class CoreMessageService {
   // this is gonna be hell
   private readonly log: Logger;
   private readonly client: Client;
@@ -13,13 +13,14 @@ export class MessageService {
   constructor(@inject(ServiceIdentifiers.Data) private readonly dataService: IDataService,
     @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService,
     @inject(ServiceIdentifiers.Logging) loggingService: ILoggingService,
-    @inject(ServiceIdentifiers.Client) clientService: IClientService) {
+    @inject(ServiceIdentifiers.Client) clientService: IClientService,
+    @inject(ServiceIdentifiers.Message) private readonly messageService: IMessageService) {
     this.log = loggingService.getLogger('core');
     this.client = clientService.getClient();
   }
 
   public async sendGuildWelcomeMessage(guild: Guild): Promise<void> {
-    if (!(await this.configurationService.shouldShowWelcomeMessage())) {
+    if (!(await this.configurationService.get('showWelcomeMessage'))) {
       return;
     }
     const guildConfiguration: GuildConfiguration = toOne(await this.dataService.load(GuildConfiguration, {id: guild.id}));
@@ -36,9 +37,9 @@ export class MessageService {
   }
 
   private async sendWelcomeMessage(me: GuildMember, channel: TextChannel, commandPrefix: string): Promise<OneOrMany<Message>> {
-    const message: string = `Hello everyone! ${me.displayName} here.\r\n` +
+    const text: string = `Hello everyone! ${me.displayName} here.\r\n` +
       `I'm a modular bot framework, with a potential variety of functions!\r\n` +
       `Feel free to ask for \`${commandPrefix}help\` if you're interested in learning more!`;
-    return channel.send(message);
+    return this.messageService.send(channel, text);
   }
 }
