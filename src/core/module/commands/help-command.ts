@@ -1,8 +1,7 @@
-import { Command, lazyInject, ServiceIdentifiers, ICommandService, IModuleService, Module, IClientService, IConfigurationService, ILoggingService, Logger } from "@satyrnidae/apdb-api";
+import { Command, lazyInject, ServiceIdentifiers, ICommandService, IModuleService, Module, IClientService, IConfigurationService, IMessageService } from "@satyrnidae/apdb-api";
 import { Options, Arguments } from 'yargs-parser';
-import { Message, MessageEmbed, NewsChannel, User } from "discord.js";
-import { toMany, forEachAsync } from "@satyrnidae/apdb-utils";
-import { Embeds } from 'discord-paginationembed';
+import { EmojiResolvable, Message, MessageEmbed, NewsChannel } from "discord.js";
+import { toMany, forEachAsync, pickRandom } from "@satyrnidae/apdb-utils";
 
 const MAX_FIELDS: number = 3;
 
@@ -51,8 +50,8 @@ export class HelpCommand extends Command {
   @lazyInject(ServiceIdentifiers.Configuration)
   private readonly configurationService: IConfigurationService;
 
-  @lazyInject(ServiceIdentifiers.Logging)
-  private readonly loggingService!: ILoggingService;
+  @lazyInject(ServiceIdentifiers.Message)
+  private readonly messageService!: IMessageService;
 
   /**
    * Checks if the command
@@ -68,40 +67,37 @@ export class HelpCommand extends Command {
    */
   public async run(message: Message, args: Arguments): Promise<void> {
     if (message.channel instanceof NewsChannel) {
-      // what how
+      await this.messageService.reply(message, 'I can\'t run that command in a news channel!');
       return;
     }
     const page: number = args['page'] || 1;
 
     if (this.allParam(args)) {
-      return this.sendAllHelpMessage(message, page);
+      await this.sendAllHelpMessage(message, page);
+      return;
     }
 
-    return this.sendHelpMessage(message);
+    await this.sendHelpMessage(message);
   }
 
   private async sendHelpMessage(message: Message): Promise<void> {
     const name: string = message.guild ? message.guild.me.displayName : this.clientService.getClient().user.username;
     const prefix: string = await this.commandService.getCommandPrefix(message.guild);
+    const randomHeart: EmojiResolvable = pickRandom(await this.configurationService.get('hearts'));
     const helpMessage: string = `Hi! I'm ${name}, your modular robot friend!\r\n`
       .concat(`To list all the commands that I can understand, just send the command \`${prefix}help --all\` somewhere i can see it!\r\n`)
       .concat(`You can also check out my core documentation on <https://www.github.com/satyrnidae/apdb-core>.\r\n`)
-      .concat(`Thanks! ${await this.configurationService.getRandomHeart()}`);
+      .concat(`Thanks! ${randomHeart}`);
 
-    await message.reply(helpMessage);
+    await this.messageService.reply(message, helpMessage);
   }
 
   private async sendAllHelpMessage(message: Message, page: number): Promise<void> {
-    if (message.channel instanceof NewsChannel) {
-      // what how
-      return;
-    }
-
-    const modules: Module[] = toMany(this.moduleService.getAllModules());
+    const modules: Module[] = toMany(await this.moduleService.getAllModules());
     const modulesWithCommands: Module[] = modules.filter(module => toMany(this.commandService.getAll(module.moduleInfo.id, message.guild)).length);
 
     if (!modulesWithCommands.length) {
-      await message.reply('There are no commands for me to list!');
+      await this.messageService.reply(message, 'There are no commands for me to list!');
     }
 
     const embeds: MessageEmbed[] = [];
@@ -124,32 +120,7 @@ export class HelpCommand extends Command {
       }
     });
 
-    const log: Logger = this.loggingService.getLogger(this.moduleId);
-    const currentPage: number = Math.min(embeds.length, page);
-    const paginatedEmbeds = new Embeds()
-      .setArray(embeds)
-      .setAuthorizedUsers([message.author.id])
-      .setChannel(message.channel)
-      .setPageIndicator('footer')
-      .setColor(await this.configurationService.getBotEmbedColor())
-      .setDeleteOnTimeout(true)
-      .setPage(currentPage)
-      .on('start', () => log.debug('Added a new paginated embed.'))
-      .on('finish', (user: User) => {
-        log.debug(`User ${user.username} finished a paginated embed.`);
-        if (message.deletable) {
-          message.delete();
-        }
-      })
-      .on('expire', () => {
-        log.debug('A paginated embed expired.');
-        if (message.deletable) {
-          message.delete();
-        }
-      })
-      .on('error', (error: Error) => log.error(error));
-
-    await paginatedEmbeds.build();
+    await this.messageService.replyWithPaginatedEmbed(embeds, message, page);
   }
 
   private allParam(args: Arguments) {
