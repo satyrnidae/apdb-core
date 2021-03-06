@@ -22,7 +22,7 @@ export class GuildConfigurationFactory implements IDataEntityFactory<GuildConfig
 
     if (!rows.length && args.id) {
       const guildConfiguration: GuildConfiguration = new GuildConfiguration();
-      guildConfiguration.commandPrefix = args.commandPrefix || await this.configurationService.getDefaultPrefix();
+      guildConfiguration.commandPrefix = args.commandPrefix || await this.configurationService.get('defaultPrefix');
       guildConfiguration.welcomeMessageSent = args.welcomeMessageSent;
       guildConfiguration.id = args.id;
 
