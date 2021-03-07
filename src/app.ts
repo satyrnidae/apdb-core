@@ -59,7 +59,7 @@ async function splash(configurationService: IConfigurationService<IAppConfigurat
     }, 100);
     sleep(3000).then(() => {
       clearInterval(handle);
-      process.stdout.write(`\r${new Array(message.length+3).join(' ')}\r`);
+      process.stdout.write(`\r${' '.repeat(message.length+3)}\r`);
       resolver();
     });
   });
