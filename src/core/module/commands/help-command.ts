@@ -2,6 +2,7 @@ import { Command, lazyInject, ServiceIdentifiers, ICommandService, IModuleServic
 import { Options, Arguments } from 'yargs-parser';
 import { EmojiResolvable, Message, MessageEmbed, NewsChannel } from "discord.js";
 import { toMany, forEachAsync, pickRandom } from "@satyrnidae/apdb-utils";
+import { IAppConfiguration } from "../../services/configuration/app-configuration";
 
 const MAX_FIELDS: number = 3;
 
@@ -48,7 +49,7 @@ export class HelpCommand extends Command {
   private readonly clientService: IClientService;
 
   @lazyInject(ServiceIdentifiers.Configuration)
-  private readonly configurationService: IConfigurationService;
+  private readonly configurationService: IConfigurationService<IAppConfiguration>;
 
   @lazyInject(ServiceIdentifiers.Message)
   private readonly messageService!: IMessageService;

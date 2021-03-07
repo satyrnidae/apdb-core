@@ -4,6 +4,7 @@ import { Mutex, OneOrMany, toOne, toMany } from "@satyrnidae/apdb-utils";
 import { Guild } from "discord.js";
 import { GuildConfiguration } from "../../db/entity/guild-configuration";
 import { CommandOptions } from "../../db/entity/command-options";
+import { IAppConfiguration } from "./configuration/app-configuration";
 
 const Commands: Command[] = [];
 const CommandMutex: Mutex = new Mutex();
@@ -14,7 +15,7 @@ export class CommandService implements ICommandService {
   private readonly log: Logger;
 
   constructor(@inject(ServiceIdentifiers.Logging) loggingService: ILoggingService,
-    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService,
+    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService<IAppConfiguration>,
     @inject(ServiceIdentifiers.Data) private readonly dataService: IDataService) {
     this.log = loggingService.getLogger('core');
   }

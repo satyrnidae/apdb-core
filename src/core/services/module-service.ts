@@ -11,6 +11,7 @@ import AdmZip from 'adm-zip';
 import { CoreModule } from '../module/core-module';
 import { Guild } from 'discord.js';
 import { GuildConfiguration } from '../../db/entity/guild-configuration';
+import { IAppConfiguration } from './configuration/app-configuration';
 
 tmp.setGracefulCleanup();
 
@@ -24,7 +25,7 @@ export class ModuleService implements IModuleService {
   constructor(@inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService,
     @inject(ServiceIdentifiers.Event) private readonly eventService: IEventService,
     @inject(ServiceIdentifiers.Command) private readonly commandService: ICommandService,
-    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService,
+    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService<IAppConfiguration>,
     @inject(ServiceIdentifiers.Data) private readonly dataService: IDataService) {
     this.log = loggingService.getLogger('core');
   }
@@ -127,7 +128,7 @@ export class ModuleService implements IModuleService {
           modules.push(result);
         }
       } catch (ex) {
-        this.log.debug(`Unable to load module from ${candidate.Directory}/${candidate.Name}.`);
+        this.log.trace(`Unable to load module from ${candidate.Directory}/${candidate.Name}.`);
         this.log.trace(ex);
       }
     });
@@ -142,14 +143,12 @@ export class ModuleService implements IModuleService {
     });
 
     // De-duplicated list
-    const deDuplicated: IModuleInfo[] = Array.from(new Set(modules.map(c => c.id)))
+    return Array.from(new Set(modules.map(c => c.id)))
       .map(id => {
         const candidate = modules.find(c => c.id === id);
         this.log.info(`Loading module ${candidate.id}@${candidate.version} from ${candidate.details.path}.`);
         return candidate;
       });
-
-    return deDuplicated;
   }
 
   private async registerDependencies(): Promise<void> {

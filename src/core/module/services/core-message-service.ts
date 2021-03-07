@@ -3,6 +3,7 @@ import { ServiceIdentifiers, Logger, ILoggingService, IConfigurationService, ICl
 import { Guild, Client, GuildMember, TextChannel, Message } from "discord.js";
 import { GuildConfiguration } from "../../../db/entity/guild-configuration";
 import { toOne, OneOrMany } from "@satyrnidae/apdb-utils";
+import { IAppConfiguration } from "../../services/configuration/app-configuration";
 
 @injectable()
 export class CoreMessageService {
@@ -11,7 +12,7 @@ export class CoreMessageService {
   private readonly client: Client;
 
   constructor(@inject(ServiceIdentifiers.Data) private readonly dataService: IDataService,
-    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService,
+    @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService<IAppConfiguration>,
     @inject(ServiceIdentifiers.Logging) loggingService: ILoggingService,
     @inject(ServiceIdentifiers.Client) clientService: IClientService,
     @inject(ServiceIdentifiers.Message) private readonly messageService: IMessageService) {

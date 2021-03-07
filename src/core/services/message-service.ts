@@ -4,6 +4,7 @@ import { Message, Channel, DMChannel, TextChannel, MessageEmbed, User, ChannelRe
 import { inject, injectable } from 'inversify';
 import { Embeds } from 'discord-paginationembed';
 import { GuildConfiguration } from '../../db/entity/guild-configuration';
+import { IAppConfiguration } from './configuration/app-configuration';
 
 @injectable()
 export class MessageService implements IMessageService {
@@ -12,7 +13,7 @@ export class MessageService implements IMessageService {
 
   constructor(@inject(ServiceIdentifiers.Client) private readonly clientService: IClientService,
               @inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService,
-              @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService,
+              @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService<IAppConfiguration>,
               @inject(ServiceIdentifiers.Data) private readonly dataService: IDataService) {
     this.log = this.loggingService.getLogger('core');
   }

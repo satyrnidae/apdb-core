@@ -4,11 +4,12 @@ import { parse } from 'discord-command-parser';
 import { Message } from "discord.js";
 import { toOne } from "@satyrnidae/apdb-utils";
 import yparser, { Arguments } from 'yargs-parser';
+import { IAppConfiguration } from "../../services/configuration/app-configuration";
 
 export class CommandHandler extends MessageEventHandler {
 
   @lazyInject(ServiceIdentifiers.Configuration)
-  private readonly configurationService!: IConfigurationService;
+  private readonly configurationService!: IConfigurationService<IAppConfiguration>;
 
   @lazyInject(ServiceIdentifiers.Command)
   private readonly commandService!: ICommandService;

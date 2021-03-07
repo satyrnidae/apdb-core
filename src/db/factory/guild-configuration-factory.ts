@@ -2,13 +2,14 @@ import { GuildConfiguration } from "../entity/guild-configuration";
 import { IDataEntityFactory, ServiceIdentifiers, IDataService, IConfigurationService, lazyInject, IModuleService } from "@satyrnidae/apdb-api";
 import { OneOrMany } from "@satyrnidae/apdb-utils";
 import { Repository } from "typeorm";
+import { IAppConfiguration } from "../../core/services/configuration/app-configuration";
 
 export class GuildConfigurationFactory implements IDataEntityFactory<GuildConfiguration> {
 
   @lazyInject(ServiceIdentifiers.Data)
   private readonly dataService!: IDataService;
   @lazyInject(ServiceIdentifiers.Configuration)
-  private readonly configurationService!: IConfigurationService;
+  private readonly configurationService!: IConfigurationService<IAppConfiguration>;
   @lazyInject(ServiceIdentifiers.Module)
   private readonly moduleService!: IModuleService;
 
