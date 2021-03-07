@@ -55,7 +55,7 @@ async function readPackageJson(buffer: Buffer): Promise<IModuleInfo> {
     throw new Error('The package.json file could not be read.');
   }
 
-  let dependencies: any = {
+  const dependencies: any = {
     ...packageInfo.dependencies,
     ...packageInfo.peerDependencies,
     ...packageInfo.optionalDependencies,
@@ -72,7 +72,7 @@ async function readPackageJson(buffer: Buffer): Promise<IModuleInfo> {
     throw new Error(`The module was built with an incompatible version of the API (${(global as any).apiVersion} does not satisfy ${apiVersion})`);
   }
 
-  let packageAuthors: string[] = [];
+  const packageAuthors: string[] = [];
   const author: string = packageInfo.author;
   const contributors: string[] = packageInfo.contributors;
   if (author) {
