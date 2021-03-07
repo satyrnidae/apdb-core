@@ -23,7 +23,7 @@
   "homepage": "https://github.com/satyrnidae/apdb-core#readme",
   "dependencies": {
     "@discordjs/uws": "^10.149.0",
-    "@satyrnidae/apdb-api": "2.13.0",
+    "@satyrnidae/apdb-api": "2.13.1",
     "@satyrnidae/apdb-utils": "0.0.8",
     "adm-zip": "^0.4.16",
     "better-sqlite3": "^7.1.0",
@@ -44,7 +44,7 @@
     "serverline": "^1.5.0",
     "sqlite3": "^5.0.0",
     "tmp-promise": "^3.0.2",
-    "typeorm": "^0.2.25",
+    "typeorm": "^0.2.31",
     "xmlhttprequest": "^1.8.0",
     "yargs-parser": "^18.1.3"
   },
