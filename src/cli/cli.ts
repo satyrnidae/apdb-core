@@ -172,6 +172,19 @@ export class Cli {
 
           await this.writeMore(...output);
         }
+      },
+      <ICliCommand>{
+        command: 'eval',
+        commandOptions: {},
+        description: 'Evaluates a line of javascript code.',
+        syntax: 'eval "code"',
+        handle: async(args: Arguments): Promise<void> => {
+          try {
+            console.log(`Result: ${eval(args._.join(' '))}`);
+          } catch (err) {
+            this.log.error(err);
+          }
+        }
       }
     );
   }
@@ -206,7 +219,16 @@ export class Cli {
     // Chop out the command.
     const commandName: string = commandLine.split(/\s+/)[0];
     // Chop out the arguments and remove any blank values.
-    const commandArgs: string[] = commandLine.split(/\s+/).slice(1).filter(value => value.match(/\S+/));
+    const commandArgs: string[] = commandLine.match(/\\?.|^$/g).reduce((p:any, c:any) => {
+      if (c === '"') {
+        p.quote ^= 1;
+      } else if (!p.quote && c === ' ') {
+        p.a.push('');
+      } else {
+        p.a[p.a.length-1] += c.replace(/\\(.)/,"$1");
+      }
+      return p;
+    }, { a: [''] }).a.slice(1); //split(/\s+/).slice(1).filter(value => value.match(/\S+/));
     // Find a command which matches the input command name.
     const cliCommand: ICliCommand = this.commands.find(entry => toMany(entry.command).find(name => name.toLowerCase() === commandName));
     if (!cliCommand) {
