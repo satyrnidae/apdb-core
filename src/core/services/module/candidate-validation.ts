@@ -1,4 +1,4 @@
-// Performs valdation of module candidates
+// Performs validation of module candidates
 
 import { IModuleInfo, IModuleDetails, IModulePackage, IModulePackageDetails } from "@satyrnidae/apdb-api";
 import { fsa, Resolve } from "@satyrnidae/apdb-utils";
@@ -152,7 +152,7 @@ export namespace Candidates {
     const candidatePath: string = `${candidate.Directory}/${candidate.Name}`;
     const stats: Stats = await fsa.lstatAsync(candidatePath);
 
-    // Make sure we're dealing with a directory. If not hand off to the subloader to try to extract the zipped module.
+    // Make sure we're dealing with a directory. If not hand off to the sub-loader to try to extract the zipped module.
     if (!stats.isDirectory()) {
       return getFileCandidate(candidate, stats);
     }
