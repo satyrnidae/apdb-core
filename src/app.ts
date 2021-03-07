@@ -1,8 +1,7 @@
 import { resolve } from "path";
 import * as semver from 'semver';
-import * as srvLine from 'serverline';
 import { Container, ILoggingService, IModuleService, ServiceIdentifiers, IConfigurationService, IClientService, IEventService, Logger, ILifecycle, IDataService, ICommandService, IMessageService } from "@satyrnidae/apdb-api";
-import { sleep, fsa, pickRandom } from '@satyrnidae/apdb-utils';
+import { sleep, fsa, pickRandom, OneOrMany } from '@satyrnidae/apdb-utils';
 import { ConfigurationService } from "./core/services/configuration-service";
 import { LoggingService } from "./core/services/logging-service";
 import { ModuleService } from "./core/services/module-service";
@@ -15,17 +14,20 @@ import { GuildConfiguration } from "./db/entity/guild-configuration";
 import { GuildConfigurationFactory } from "./db/factory/guild-configuration-factory";
 import { CommandService } from "./core/services/command-service";
 import { MessageService } from "./core/services/message-service";
+import { IAppConfiguration } from "./core/services/configuration/app-configuration";
+import { Cli } from "./cli/cli";
 
-async function splash(): Promise<void> {
+async function splash(configurationService: IConfigurationService<IAppConfiguration>): Promise<void> {
   process.stdout.write('\x1Bc');
+  process.stdout.write('\x1B[?25l');
   process.stdout.write('╔═════════════════════════════════════════════╗\n');
   process.stdout.write('║        Another Pluggable Discord Bot        ║\n');
   process.stdout.write('║        ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔        ║\n');
   process.stdout.write('║                            │╲▁╱╲            ║\n');
   process.stdout.write('║                          ╷─┘    ╲      ▁▁▁  ║\n');
   process.stdout.write('║                           ╲▁   ▁╱     ╱╲ │  ║\n');
-  process.stdout.write('║  (c) 2020 Isabel Maskrey    ╱   ╲▁▁▁ ╱  ╲│  ║\n');
-  process.stdout.write('║  All rights reserved       ╱        ╲   ╱   ║\n');
+  process.stdout.write('║  (c) 2021 Isabel Maskrey    ╱   ╲▁▁▁ ╱  ╲│  ║\n');
+  process.stdout.write('║  Some rights reserved.     ╱        ╲   ╱   ║\n');
   process.stdout.write('║                            │ │ │ ╱     ╱    ║\n');
   process.stdout.write('║                            │ │ │ ╲  ╱▁╱     ║\n');
   process.stdout.write('║                            ╱▁╱▁╱▁╱▁▁╱       ║\n');
@@ -35,42 +37,36 @@ async function splash(): Promise<void> {
   process.stdout.write(`API Version ${(global as any).apiVersion}\n`);
   process.stdout.write('\n');
 
-  const messageFile: string = `${__dirname}/../messages.txt`;
-  if(await fsa.existsAsync(messageFile)) {
-    const fileContents: Buffer = await fsa.readFileAsync(messageFile);
-    const messages: string[] = fileContents.toString().split(/\r\n/).filter(line => line);
-    const message: string = pickRandom(messages);
-    process.stdout.write(`${message}...\n`);
-    process.stdout.write('\n');
-  }
+  const messages: OneOrMany<string> = await configurationService.get('startupMessages');
+  const message: string = pickRandom(messages);
 
   // yea this is only async to await this sleep();
-  await sleep(3000);
+  return new Promise<void>(resolver => {
+    const spinner: string[] = ['-', '\\', '|', '/'];
+    let index: number = 0;
+    const handle: NodeJS.Timeout = setInterval(() => {
+      process.stdout.write('\r');
+      process.stdout.write(message);
+      process.stdout.write(' ');
+
+      ++index;
+      let spinnerChar: string = spinner[index];
+      if (!spinnerChar) {
+        index = 0;
+        spinnerChar = spinner[index];
+      }
+      process.stdout.write(spinnerChar);
+    }, 100);
+    sleep(3000).then(() => {
+      clearInterval(handle);
+      process.stdout.write(`\r${new Array(message.length+3).join(' ')}\r`);
+      resolver();
+    });
+  });
 }
 
-function initializeInput(log: Logger): void {
-  // User input init
-  srvLine.init();
-  srvLine.setCompletion(['exit', 'quit', 'stop']);
-  srvLine.setPrompt('> ');
-
-  srvLine.on('line', (input: string) => {
-    switch (input.toLowerCase()) {
-      case '':
-        break;
-      case 'exit':
-      case 'stop':
-      case 'quit':
-        process.exit();
-      default:
-        log.error(`Unknown command: "${input}"`);
-        break;
-    }
-
-    if (srvLine.isMuted()) {
-      srvLine.setMuted(false);
-    }
-  });
+async function initializeInput(configurationService: IConfigurationService<IAppConfiguration>, loggingService: ILoggingService): Promise<void> {
+  return new Cli(configurationService, loggingService).initialize();
 }
 
 async function executeLifecycle(lifecycle: ILifecycle): Promise<void> {
@@ -89,10 +85,8 @@ async function run(): Promise<void> {
   (global as any).apiVersion = semver.clean((packageInfo.dependencies['@satyrnidae/apdb-api'] as string).replace('^', ''));
   (global as any).configPath = resolve(`${__dirname}/../config.json`);
 
-  await splash();
-
   // Core service bindings
-  Container.bind<IConfigurationService>(ServiceIdentifiers.Configuration).to(ConfigurationService).inSingletonScope();
+  Container.bind<IConfigurationService<IAppConfiguration>>(ServiceIdentifiers.Configuration).to(ConfigurationService).inSingletonScope();
   Container.bind<IClientService>(ServiceIdentifiers.Client).to(ClientService).inSingletonScope();
   Container.bind<IEventService>(ServiceIdentifiers.Event).to(EventService).inSingletonScope();
   Container.bind<ILoggingService>(ServiceIdentifiers.Logging).to(LoggingService).inSingletonScope();
@@ -102,11 +96,13 @@ async function run(): Promise<void> {
   Container.bind<IMessageService>(ServiceIdentifiers.Message).to(MessageService).inSingletonScope();
 
   // Load configuration
-  const configurationService: IConfigurationService = Container.get<IConfigurationService>(ServiceIdentifiers.Configuration);
+  const configurationService: IConfigurationService<IAppConfiguration> = Container.get<IConfigurationService<IAppConfiguration>>(ServiceIdentifiers.Configuration);
+
+  await splash(configurationService);
 
   // Set up logger
-  const log: Logger = Container.get<ILoggingService>(ServiceIdentifiers.Logging).getLogger('core');
-  log.setLogLevel(await configurationService.get('logLevel'));
+  const loggingService: ILoggingService = Container.get<ILoggingService>(ServiceIdentifiers.Logging);
+  const log: Logger = loggingService.getLogger('core');
 
   // Register data service factories
   const dataService: IDataService = Container.get<IDataService>(ServiceIdentifiers.Data);
@@ -134,7 +130,7 @@ async function run(): Promise<void> {
   try {
     // Start the robot
     const robot: Robot = Container.resolve(Robot);
-    await executeLifecycle(robot).then(() => initializeInput(log));
+    await executeLifecycle(robot).then(async () => await initializeInput(configurationService, loggingService));
   } catch (err) {
     log.error(err);
   }
