@@ -1,9 +1,10 @@
-import { Container, IConfigurationService, ILoggingService, IModuleService, Logger, Module, ServiceIdentifiers } from '@satyrnidae/apdb-api';
+import { Container, IClientService, IConfigurationService, ILoggingService, IMessageService, IModuleService, Logger, Module, ServiceIdentifiers } from '@satyrnidae/apdb-api';
 import { IAppConfiguration } from '../core/services/configuration/app-configuration';
 import * as srvLine from 'serverline';
 import { ICliCommand } from './cli-command';
 import yparser, { Options, Arguments } from 'yargs-parser';
-import { toMany } from '@satyrnidae/apdb-utils';
+import { toMany, toOne } from '@satyrnidae/apdb-utils';
+import { Channel, Client, DMChannel, Guild, TextChannel } from 'discord.js';
 
 /**
  * Command line interface module for interacting with the bot while it's running.
@@ -184,6 +185,54 @@ export class Cli {
           } catch (err) {
             this.log.error(err);
           }
+        }
+      },
+      <ICliCommand>{
+        command: 'send',
+        commandOptions: <Options>{
+          alias: {
+            guild: ['-g'],
+            channel: ['-c'],
+            message: ['-m'],
+            force: ['-f']
+          },
+          string: ['guild','channel','message'],
+          boolean: ['force']
+        },
+        description: 'Sends a message to a specific guild and channel. The message will be marked as sent from the console.',
+        syntax: 'send {-g|--guild} guild {-c|--channel} channel [-m|--message] message',
+        handle: async (args: Arguments): Promise<void> => {
+          const guildId: string = args['guild'];
+          const channelId: string = args['channel']
+          const message: string = args['message'] || args._.join(' ');
+          const force: boolean = args['force'];
+          if (!message) {
+            this.log.error('Cannot send an empty message!');
+          }
+          const client: Client = Container.get<IClientService>(ServiceIdentifiers.Client).getClient();
+          const guild: Guild = await client.guilds.fetch(guildId, true);
+          if (!guild) {
+            this.log.error('Cannot send message: The specified guild was not found!');
+          }
+          const channel: Channel = guild.channels.cache.find(ch => ch.id === channelId);
+          if (!channel || !(channel instanceof TextChannel)) {
+            this.log.error('Cannot send message: The specified channel was not found, or was not a text channel!')
+          }
+          const textChannel: TextChannel = channel as TextChannel;
+          if (!force) {
+            let cancel: boolean = false;
+            await new Promise<void>(resolve => srvLine.question(`Send your message to "${guild.name}" in channel #${textChannel.name}? [y/N]:`, (answer: string) => {
+              cancel = answer.match(/^y(es)?$/i) ? false : true;
+              process.stdout.write('\x1B[1K> ');
+              resolve();
+            }));
+            if (cancel) {
+              return;
+            }
+          }
+          const messageService: IMessageService = Container.get<IMessageService>(ServiceIdentifiers.Message);
+          await messageService.send(textChannel, `*Note: this message was sent via the bot's command line.*\n${message}`);
+          this.log.info('Message sent!');
         }
       }
     );
