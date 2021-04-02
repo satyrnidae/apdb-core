@@ -1,6 +1,6 @@
 import { injectable, inject } from "inversify";
 import { ServiceIdentifiers, IConfigurationService, IClientService, IDataService, IMessageService, ICommandService, Module, IModuleService, Command } from "@satyrnidae/apdb-api";
-import { Guild, Client, GuildMember, TextChannel, Message, EmojiResolvable, MessageEmbed } from "discord.js";
+import { Guild, Client, GuildMember, TextChannel, Message, EmojiResolvable, MessageEmbed, DMChannel } from "discord.js";
 import { GuildConfiguration } from "../../../db/entity/guild-configuration";
 import { toOne, OneOrMany, pickRandom, toMany, forEachAsync } from "@satyrnidae/apdb-utils";
 import { IAppConfiguration } from "../../services/configuration/app-configuration";
@@ -67,9 +67,9 @@ export class CoreMessageService {
     const name: string = replyTo.guild ? replyTo.guild.me.displayName : this.client.user.username;
     const prefix: string = await this.commandService.getCommandPrefix(replyTo.guild);
     const randomHeart: EmojiResolvable = pickRandom(await this.configurationService.get('hearts'));
-    const helpMessage: string = `Hi! I'm ${name}, your modular robot friend!\r\n`
-      .concat(`To list all the commands that I can understand, just send the command \`${prefix}help --all\` somewhere i can see it!\r\n`)
-      .concat(`You can also check out my core documentation on <https://www.github.com/satyrnidae/apdb-core>.\r\n`)
+    const helpMessage: string = `Hi! I'm ${name}, your modular robot friend!\n`
+      .concat(`To list all the commands that I can understand, just send the command \`${prefix}help --all\` somewhere i can see it!\n`)
+      .concat(`You can also check out my core documentation on <https://www.github.com/satyrnidae/apdb-core>.\n`)
       .concat(`Thanks! ${randomHeart}`);
 
     await this.messageService.reply(replyTo, helpMessage);
@@ -89,7 +89,9 @@ export class CoreMessageService {
     }
 
     if (!modules.length) {
-      await this.messageService.reply(replyTo, 'I apologize, but I couldn\'t find anything that matched those options!');
+      let prefix: string = await this.commandService.getCommandPrefix(replyTo.guild);
+      await this.messageService.reply(replyTo, 'I apologize, but I couldn\'t find anything that matched those options!\n'
+        .concat(`You can use the command \`${prefix}help all\` to list everything I know about!`));
       return;
     }
 
@@ -106,6 +108,41 @@ export class CoreMessageService {
     });
 
     await this.messageService.replyWithPaginatedEmbed(embeds, replyTo, 'Here\'s what I found:', page);
+  }
+
+  /**
+   * Sends a message to a user letting them know that the command prefix can't be changed in a direct message.
+   * @param channel The DMChannel that the user executed the command in.
+   * @returns One or many messages.
+   */
+  public async sendCannotChangePrefixInDmMessage(channel: DMChannel): Promise<OneOrMany<Message>> {
+    const prefix: string = await this.commandService.getCommandPrefix(null);
+    return this.messageService.send(channel, 'Hey there! I\'m sorry, but you can\'t change the command prefix within a direct message.\n'
+      .concat('You can set the command prefix for a specific guild if you\'re an admin, owner, or have the "Manage Server" permission.\n')
+      .concat(`As always, feel free to ask for help with the command \`${prefix}help\`!`));
+  }
+
+  /**
+   * Sends a message to the specified channel letting a user know
+   * @param channel
+   * @returns
+   */
+  public async sendInvalidPrefixMessage(message: Message): Promise<OneOrMany<Message>> {
+    return this.messageService.reply(message, 'Unfortunately, I can\'t set the prefix to that! Please choose a different prefix.\n'
+      .concat('Valid prefixes are fifteen characters or less in length, and must not be empty.'));
+  }
+
+  /**
+   * Sends a message showing that the prefix was updated.
+   * @param message
+   * @param prefix
+   * @returns
+   */
+  public async sendPrefixChangedSuccessfullyMessage(message: Message, prefix: string): Promise<OneOrMany<Message>> {
+    const defaultPrefix: string = await this.configurationService.get('defaultPrefix');
+    return this.messageService.reply(message, `The server's custom prefix has been updated to \`${prefix}\`!\n`
+      .concat('From now on, I\'ll respond to commands which start with that.\n')
+      .concat(`I'll still keep listening to \`${defaultPrefix}help\`, so feel free to use that if you forget!`));
   }
 
   private createCommandInfoEmbeds(module: Module, commandId: string, commands: Command[], prefix: string): MessageEmbed[] {
