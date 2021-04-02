@@ -17,37 +17,58 @@ import { MessageService } from "./core/services/message-service";
 import { IAppConfiguration } from "./core/services/configuration/app-configuration";
 import { Cli } from "./cli/cli";
 
+require('./cli/format');
+
+/**
+ * Shows a splash image in the console.
+ * @param configurationService The configuration service instance.
+ */
 async function splash(configurationService: IConfigurationService<IAppConfiguration>): Promise<void> {
-  process.stdout.write('\x1Bc');
   process.stdout.write('\x1B[?25l');
-  process.stdout.write('╔═════════════════════════════════════════════╗\n');
-  process.stdout.write('║        Another Pluggable Discord Bot        ║\n');
-  process.stdout.write('║        ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔        ║\n');
-  process.stdout.write('║                            │╲▁╱╲            ║\n');
-  process.stdout.write('║                          ╷─┘    ╲      ▁▁▁  ║\n');
-  process.stdout.write('║                           ╲▁   ▁╱     ╱╲ │  ║\n');
-  process.stdout.write('║  (c) 2021 Isabel Maskrey    ╱   ╲▁▁▁ ╱  ╲│  ║\n');
-  process.stdout.write('║  Some rights reserved.     ╱        ╲   ╱   ║\n');
-  process.stdout.write('║                            │ │ │ ╱     ╱    ║\n');
-  process.stdout.write('║                            │ │ │ ╲  ╱▁╱     ║\n');
-  process.stdout.write('║                            ╱▁╱▁╱▁╱▁▁╱       ║\n');
-  process.stdout.write('╚═════════════════════════════════════════════╝\n');
+  process.stdout.write('╔═══════════════════════════════════════════════════════════════╗'.brightBlue().concat('\n'));
+  process.stdout.write('║'.brightBlue().concat('                 ','Another Pluggable Discord Bot'.b().u().r(),'__'.red().dim().r(),'               ','║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('                                            ','╱   ╲___'.red().dim().r(),'           ','║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('                                           ','╱   ╱    ╲'.red().dim().r(),'          ','║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('                                          ','|   ╱     ╱'.red().dim().r(),'          ','║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('                                      ','╳ ╳'.green().dim().r(),' |  ╱     ╱'.red().dim().r(),'__'.yellow(),'         ','║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('                                     ','┼ ┼'.green().dim().r(),'  |_╱     ╱'.red().dim().r(),'   ╲____'.yellow(),'    ','║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('  © 2019-2021 Isabel Maskrey         '.dim().r(),'┼ ┼'.green().dim().r(),' ╱'.yellow(),'|_|____╱'.red().dim().r(),'  ╱  │   ╲   '.yellow(),'║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('  Some Rights Reserved.               '.dim().r(),'╳'.green().dim().r(),'╭'.yellow(),'╳'.green().dim().r(),'       ___|   ╲    ╲  '.yellow(),'║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('  See LICENSE for more information.   '.dim().r(),'╱_ ╱_'.gray(),'╭─╮╭╯ ╲__╲___|    ╲ '.yellow(),'║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('                                       ','╰─╮'.yellow(),'_'.white(),'│ ││     '.yellow(),'╲╲  ╲╲'.gray(),'_  │ '.yellow(),'║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('                                        ','╱'.gray(),'╰─╯'.white(),'╱╱       ╰╯ || '.gray(),'╲'.yellow(),'_'.white(),'│ '.yellow(),'║'.brightBlue(),'\n'));
+  process.stdout.write('║'.brightBlue().concat('                                        ','╰╯  ╰╯          ╰╯  '.gray(),'╲│ '.white(),'║'.brightBlue(),'\n'));
+  process.stdout.write('║                                                               ║'.brightBlue().concat('\n'));
+  process.stdout.write('╚═══════════════════════════════════════════════════════════════╝'.brightBlue().concat('\n'));
   process.stdout.write('\n');
   process.stdout.write(`Version ${(global as any).version }\n`);
   process.stdout.write(`API Version ${(global as any).apiVersion}\n`);
   process.stdout.write('\n');
+
+  // For reference here's what the ASCII art looks like devoid of formatting:
+  //        ___
+  //       ╱   ╲___
+  //      ╱   ╱    ╲
+  //     |   ╱     ╱
+  //     |  ╱     ╱__
+  // ┼ ┼ |_╱     ╱   ╲ ___
+  // ┼ ┼╱|_|____╱  ╱  │   ╲
+  // ╳╭╳       ___|   ╲    ╲
+  // ╱_ ╱_╭─╮╭╯ ╲__╲___|    ╲
+  //  ╰─╮_│ ││      ╲╲ ╲╲_  │
+  //   ╱╰─╯╱╱       ╰╯ || ╲_│
+  //   ╰╯  ╰╯          ╰╯  ╲│
 
   const messages: OneOrMany<string> = await configurationService.get('startupMessages');
   const message: string = pickRandom(messages);
 
   // yea this is only async to await this sleep();
   return new Promise<void>(resolver => {
-    const spinner: string[] = ['-', '\\', '|', '/'];
+    const spinner: string[] = ['   ','.  ','.. ','...'];
     let index: number = 0;
     const handle: NodeJS.Timeout = setInterval(() => {
       process.stdout.write('\r');
       process.stdout.write(message);
-      process.stdout.write(' ');
 
       ++index;
       let spinnerChar: string = spinner[index];
@@ -56,19 +77,19 @@ async function splash(configurationService: IConfigurationService<IAppConfigurat
         spinnerChar = spinner[index];
       }
       process.stdout.write(spinnerChar);
-    }, 100);
+    }, 300);
     sleep(3000).then(() => {
       clearInterval(handle);
-      process.stdout.write(`\r${' '.repeat(message.length+3)}\r`);
+      process.stdout.write(`\r${' '.repeat(message.length+spinner[0].length)}\r`);
       resolver();
     });
   });
 }
 
-async function initializeInput(configurationService: IConfigurationService<IAppConfiguration>, loggingService: ILoggingService): Promise<void> {
-  return new Cli(configurationService, loggingService).initialize();
-}
-
+/**
+ * Executes the bot's lifecycle.
+ * @param lifecycle The lifecycle instance to execute
+ */
 async function executeLifecycle(lifecycle: ILifecycle): Promise<void> {
   await lifecycle.preInitialize();
   await lifecycle.initialize();
@@ -76,6 +97,9 @@ async function executeLifecycle(lifecycle: ILifecycle): Promise<void> {
   return lifecycle.run();
 }
 
+/**
+ * Runs the bot.
+ */
 async function run(): Promise<void> {
   // Read package
   const packageInfo: any = JSON.parse((await fsa.readFileAsync('package.json')).toString());
@@ -84,6 +108,7 @@ async function run(): Promise<void> {
   (global as any).version = packageInfo.version;
   (global as any).apiVersion = semver.clean((packageInfo.dependencies['@satyrnidae/apdb-api'] as string).replace('^', ''));
   (global as any).configPath = resolve(`${__dirname}/../config.json`);
+  (global as any).packageInfo = packageInfo;
 
   // Core service bindings
   Container.bind<IConfigurationService<IAppConfiguration>>(ServiceIdentifiers.Configuration).to(ConfigurationService).inSingletonScope();
@@ -111,7 +136,10 @@ async function run(): Promise<void> {
   // Set up client instance for initialization
   const client: Client = Container.get<IClientService>(ServiceIdentifiers.Client).getClient();
   client.on('disconnect', () => log.info('Client disconnected.'));
-  client.on('ready', () => log.info('Client ready!'));
+  client.on('ready', () =>  {
+    log.info('Client ready!');
+    new Cli().init();
+  });
 
   // Set up process input handlers
   process.on('SIGINT', function () {
@@ -130,7 +158,7 @@ async function run(): Promise<void> {
   try {
     // Start the robot
     const robot: Robot = Container.resolve(Robot);
-    await executeLifecycle(robot).then(async () => await initializeInput(configurationService, loggingService));
+    await executeLifecycle(robot);
   } catch (err) {
     log.error(err);
   }
