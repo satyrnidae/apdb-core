@@ -1,7 +1,7 @@
 // Performs validation of module candidates
 
 import { IModuleInfo, IModuleDetails, IModulePackage, IModulePackageDetails } from "@satyrnidae/apdb-api";
-import { fsa, Resolve } from "@satyrnidae/apdb-utils";
+import { fsa, Resolve, toOneOrMany } from "@satyrnidae/apdb-utils";
 import { Stats } from "fs";
 import AdmZip, { IZipEntry } from "adm-zip";
 import { satisfies } from "semver";
@@ -54,7 +54,6 @@ async function readPackageJson(buffer: Buffer): Promise<IModuleInfo> {
   if (!packageInfo) {
     throw new Error('The package.json file could not be read.');
   }
-
   const dependencies: any = {
     ...packageInfo.dependencies,
     ...packageInfo.peerDependencies,
@@ -72,28 +71,7 @@ async function readPackageJson(buffer: Buffer): Promise<IModuleInfo> {
     throw new Error(`The module was built with an incompatible version of the API (${(global as any).apiVersion} does not satisfy ${apiVersion})`);
   }
 
-  const packageAuthors: string[] = [];
-  const author: string = packageInfo.author;
-  const contributors: string[] = packageInfo.contributors;
-  if (author) {
-    packageAuthors.push(author);
-  }
-  if (contributors && contributors.length > 0) {
-    packageAuthors.push(...contributors);
-  }
-
-  return <IModuleInfo>{
-    id: packageModuleInfo.id,
-    name: packageModuleInfo.name,
-    version: packageInfo.version,
-    details: <IModuleDetails>{
-      apiVersion: apiVersion,
-      authors: packageAuthors,
-      description: packageInfo.description,
-      entryPoint: packageInfo.main,
-      website: packageInfo.homepage
-    }
-  };
+  return Candidates.constructModuleInfo(packageInfo, packageModuleInfo);
 }
 
 async function readZipPackageJSON(zippedFolder: AdmZip): Promise<IModuleInfo> {
@@ -147,6 +125,42 @@ async function getDirectoryCandidate(candidate: ModuleCandidate, stats: Stats): 
   return result;
 }
 
+function getAuthors(packageInfo: IModulePackage): string[] {
+  const packageAuthors: string[] = [];
+  const authorName: ((contributor: { name: string, email?: string, url?: string }) => string) = contributor => {
+    let author: string = contributor.name;
+    if (contributor.email) {
+      author = author.concat(' <',contributor.email,'>');
+    }
+    if (contributor.url) {
+      author = author.concat(' (',contributor.url,')');
+    }
+    return author;
+  }
+
+  if (packageInfo.author) {
+    packageAuthors.push(typeof packageInfo.author === 'string' ? packageInfo.author : authorName(packageInfo.author));
+  }
+  if (packageInfo.contributors && packageInfo.contributors.length) {
+    packageAuthors.push(...(packageInfo.contributors.map(contributor =>
+      typeof contributor === 'string' ? contributor : authorName(contributor)
+    )));
+  }
+  return packageAuthors;
+}
+
+function getFundingSources(packageInfo: IModulePackage): string[] {
+  const fundingSources: string[] = [];
+  if (packageInfo.funding) {
+    if (packageInfo.funding instanceof Array) {
+      fundingSources.push(...(packageInfo.funding.map(funding => typeof funding === 'string' ? funding : funding.url)));
+    } else {
+      fundingSources.push(typeof packageInfo.funding === 'string' ? packageInfo.funding : packageInfo.funding.url);
+    }
+  }
+  return fundingSources;
+}
+
 export namespace Candidates {
   export async function validateCandidate(candidate: ModuleCandidate): Promise<IModuleInfo> {
     const candidatePath: string = `${candidate.Directory}/${candidate.Name}`;
@@ -157,5 +171,33 @@ export namespace Candidates {
       return getFileCandidate(candidate, stats);
     }
     return getDirectoryCandidate(candidate, stats);
+  }
+
+  export function constructModuleInfo(packageInfo: IModulePackage, packageModuleInfo: IModulePackageDetails): IModuleInfo {
+    const dependencies: any = {
+      ...packageInfo.dependencies,
+      ...packageInfo.peerDependencies,
+      ...packageInfo.optionalDependencies,
+      ...packageInfo.devDependencies
+    };
+
+    const apiVersion: string = dependencies['@satyrnidae/apdb-api'];
+    const packageAuthors: string[] = getAuthors(packageInfo);
+    const fundingSources: string[] = getFundingSources(packageInfo);
+
+    return <IModuleInfo>{
+      id: packageModuleInfo.id,
+      name: packageModuleInfo.name,
+      version: packageInfo.version,
+      details: <IModuleDetails>{
+        apiVersion: apiVersion,
+        authors: toOneOrMany(packageAuthors),
+        description: packageInfo.description,
+        entryPoint: packageInfo.main,
+        website: packageInfo.homepage,
+        thumbnail: packageModuleInfo.thumbnail,
+        donate: toOneOrMany(fundingSources)
+      }
+    };
   }
 }
