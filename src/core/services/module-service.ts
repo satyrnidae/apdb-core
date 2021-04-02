@@ -98,7 +98,18 @@ export class ModuleService implements IModuleService {
 
       try {
         if (await fsa.existsAsync(moduleDirectory)) {
-          const candidateFiles: string[] = await fsa.readdirAsync(moduleDirectory);
+          let candidateFiles: string[] = await fsa.readdirAsync(moduleDirectory);
+          await forEachAsync(candidateFiles.filter(entry => entry.match(/^tmp-.{6}$/i)), async (entry): Promise<void> => {
+            await new Promise<void>((resolve, reject) => {
+              fs.rmdir(`${moduleDirectory}/${entry}`, { recursive: true }, err => {
+                if (err) {
+                  reject(err);
+                }
+                resolve();
+              });
+            });
+          });
+          candidateFiles = candidateFiles.filter(entry => entry.match(/^tmp-.{6}$/i) ? false : true);
           modules.push(...(await this.verifyCandidates(...candidateFiles.map(file => <ModuleCandidate>{Directory: moduleDirectory, Name: file}))))
         } else {
           this.log.info(`Module directory ${moduleDirectory} was not found. Creating...`)
