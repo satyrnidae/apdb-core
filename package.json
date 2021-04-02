@@ -34,7 +34,7 @@
   "homepage": "https://github.com/satyrnidae/apdb-core#readme",
   "dependencies": {
     "@discordjs/uws": "^10.149.0",
-    "@satyrnidae/apdb-api": "2.13.3",
+    "@satyrnidae/apdb-api": "2.13.4",
     "@satyrnidae/apdb-utils": "0.0.8",
     "adm-zip": "^0.4.16",
     "better-sqlite3": "^7.1.0",
@@ -63,6 +63,7 @@
     "@types/adm-zip": "^0.4.33",
     "@types/node": "^12.12.21",
     "@types/semver": "^7.3.1",
+    "@types/yargs-parser": "^20.2.0",
     "nps": "^5.10.0",
     "ts-node": "^8.5.4",
     "ts-node-dev": "^1.0.0-pre.56",
