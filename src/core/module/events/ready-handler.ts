@@ -2,7 +2,7 @@ import { EventHandler, ServiceIdentifiers, IClientService, IEventService, ILoggi
 import { CoreMessageService } from "../services/core-message-service";
 import { Client } from "discord.js";
 import { forEachAsync } from "@satyrnidae/apdb-utils";
-import { IAppConfiguration } from "core/services/configuration/app-configuration";
+import { IAppConfiguration } from "../../../core/services/configuration/app-configuration";
 
 export class ReadyHandler extends EventHandler<'ready'> {
   @lazyInject(CoreMessageService)
