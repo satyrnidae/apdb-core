@@ -69,35 +69,42 @@ export class MessageService implements IMessageService {
     return message.delete();
   }
 
-  public async replyWithPaginatedEmbed(embeds: MessageEmbed[], message: Message, page: number = 0): Promise<void> {
-    if (!message) {
+  public async replyWithPaginatedEmbed(embeds: MessageEmbed[], replyTo: Message, content?: MessageContentResolvable, page: number = 0): Promise<void> {
+    if (!replyTo) {
       this.log.error('Failed to delete message: Could not resolve the message object!');
       return null;
     }
 
+    let message: Message;
+    if (content) {
+      message = toOne(await replyTo.reply(content))
+    }
     const currentPage: number = Math.min(embeds.length, page);
     const paginatedEmbeds = new Embeds()
       .setArray(embeds)
-      .setAuthorizedUsers([message.author.id])
-      .setChannel(<TextChannel | DMChannel>message.channel)
+      .setAuthorizedUsers([replyTo.author.id])
+      .setChannel(<TextChannel | DMChannel>replyTo.channel)
       .setPageIndicator('footer')
       .setColor(await this.configurationService.get('embedColor'))
-      .setDeleteOnTimeout(true)
+      .setDeleteOnTimeout(!message)
       .setPage(currentPage)
+      .setClientAssets({message})
       .on('start', () => this.log.debug('Replied with a new paginated embed.'))
       .on('finish', async (user: User) => {
         this.log.debug(`User ${user.username} finished a paginated embed.`);
-        if (message.deletable) {
-          await this.delete(message);
-        }
       })
       .on('expire', async () => {
         this.log.debug('A paginated embed expired.');
-        if (message.deletable) {
-          await this.delete(message);
+        if (message) {
+          await message.reactions.removeAll();
+          await this.addDeletionReaction(message);
         }
       })
       .on('error', (error: Error) => this.log.error(error));
+
+    if (message) {
+      paginatedEmbeds.setClientAssets({message});
+    }
 
     return paginatedEmbeds.build();
   }
