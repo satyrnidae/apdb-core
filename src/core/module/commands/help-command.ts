@@ -1,25 +1,29 @@
 import { Command, lazyInject, ServiceIdentifiers, ICommandService, IModuleService, Module, IClientService, IConfigurationService, IMessageService } from "@satyrnidae/apdb-api";
 import { Options, Arguments } from 'yargs-parser';
-import { EmojiResolvable, Message, MessageEmbed, NewsChannel } from "discord.js";
-import { toMany, forEachAsync, pickRandom } from "@satyrnidae/apdb-utils";
-import { IAppConfiguration } from "../../services/configuration/app-configuration";
-
-const MAX_FIELDS: number = 3;
+import { Message, NewsChannel } from "discord.js";
+import { CoreMessageService } from "../services/core-message-service";
 
 /**
  * Command handler which provides information on plugins and usage information
  * for commands.
  */
 export class HelpCommand extends Command {
+  /**
+   * The friendly name for the command.
+   */
   public friendlyName: string = 'Help';
-
+  /**
+   * The command that will be executed via the bot.
+   */
   public command: string = 'help';
-
+  /**
+   * Command syntax details
+   */
   public syntax: string[] = [
-    'help [[-p|--page] *page*]',
-    'help {-a|--all} [[-p|--page] *page*]',
-    'help {-l|--plugin} *plugin* [[-p|--page] *page*]',
-    'help [-c|--command] *command* [[-l|--plugin] *plugin*] [[-p|--page] *page*]'
+    'help',
+    'help {-a|--all} [[-p|--page] page]',
+    'help {-l|--plugin} plugin [[-p|--page] page]',
+    'help [-c|--command] command [{-l|--plugin} plugin] [[-p|--page] page]'
   ];
 
   public description: string = 'Provides a detailed overview of any command that the bot can perform.';
@@ -39,20 +43,11 @@ export class HelpCommand extends Command {
     }
   };
 
-  @lazyInject(ServiceIdentifiers.Command)
-  private readonly commandService: ICommandService;
-
-  @lazyInject(ServiceIdentifiers.Module)
-  private readonly moduleService: IModuleService;
-
-  @lazyInject(ServiceIdentifiers.Client)
-  private readonly clientService: IClientService;
-
-  @lazyInject(ServiceIdentifiers.Configuration)
-  private readonly configurationService: IConfigurationService<IAppConfiguration>;
-
-  @lazyInject(ServiceIdentifiers.Message)
-  private readonly messageService!: IMessageService;
+  /**
+   * The core message service.
+   */
+  @lazyInject(CoreMessageService)
+  private readonly coreMessageService!: CoreMessageService;
 
   /**
    * Checks if the command
@@ -68,60 +63,28 @@ export class HelpCommand extends Command {
    */
   public async run(message: Message, args: Arguments): Promise<void> {
     if (message.channel instanceof NewsChannel) {
-      await this.messageService.reply(message, 'I can\'t run that command in a news channel!');
-      return;
+      await this.coreMessageService.sendCommandCannotExecuteInNewsChannelMessage(message);
     }
-    const page: number = args['page'] || 1;
+    const page: number = args.page || args._.length ? +args._[args._.length - 1] || 1 : 1;
+    let command: string = args.command || args._[0];
+    let module: string = args.plugin;
 
     if (this.allParam(args)) {
-      await this.sendAllHelpMessage(message, page);
-      return;
-    }
-
-    await this.sendHelpMessage(message);
-  }
-
-  private async sendHelpMessage(message: Message): Promise<void> {
-    const name: string = message.guild ? message.guild.me.displayName : this.clientService.getClient().user.username;
-    const prefix: string = await this.commandService.getCommandPrefix(message.guild);
-    const randomHeart: EmojiResolvable = pickRandom(await this.configurationService.get('hearts'));
-    const helpMessage: string = `Hi! I'm ${name}, your modular robot friend!\r\n`
-      .concat(`To list all the commands that I can understand, just send the command \`${prefix}help --all\` somewhere i can see it!\r\n`)
-      .concat(`You can also check out my core documentation on <https://www.github.com/satyrnidae/apdb-core>.\r\n`)
-      .concat(`Thanks! ${randomHeart}`);
-
-    await this.messageService.reply(message, helpMessage);
-  }
-
-  private async sendAllHelpMessage(message: Message, page: number): Promise<void> {
-    const modules: Module[] = toMany(await this.moduleService.getAllModules());
-    const modulesWithCommands: Module[] = modules.filter(module => toMany(this.commandService.getAll(module.moduleInfo.id, message.guild)).length);
-
-    if (!modulesWithCommands.length) {
-      await this.messageService.reply(message, 'There are no commands for me to list!');
-    }
-
-    const embeds: MessageEmbed[] = [];
-    const prefix: string = await this.commandService.getCommandPrefix(message.guild);
-
-    await forEachAsync(modulesWithCommands, async (module: Module) => {
-      const commandsForModule: Command[] = toMany(await this.commandService.getAll(module.moduleInfo.id, message.guild));
-
-      for (let i: number = 0; i < commandsForModule.length / MAX_FIELDS; i++) {
-        const embed: MessageEmbed = new MessageEmbed()
-          .setTitle(`${module.moduleInfo.name} Plugin`)
-          .setDescription('Here are the commands provided by this plugin:')
-          .setFooter('');
-
-        for (let j: number = 0; j < MAX_FIELDS && commandsForModule.length > i * MAX_FIELDS + j; j++) {
-          const command: Command = commandsForModule[i * MAX_FIELDS + j]
-          embed.addField(`"${command.friendlyName}" Command`, `\`${prefix}${command.command}\`: ${command.description}\n\`\`\`${command.syntax.join('\n')}\`\`\``, false);
+      return this.coreMessageService.sendPaginatedHelpMessage(message, null, null, page);
+    } else if (command || module) {
+      if (!module && command.indexOf(':') >= 0) {
+        const sections: string[] = command.split(':');
+        if (sections.length >= 2) {
+          module = sections[0];
+          command = sections.slice(1).join(':');
+        } else {
+          command = sections[0];
         }
-        embeds.push(embed);
       }
-    });
+      return this.coreMessageService.sendPaginatedHelpMessage(message, module, command, page);
+    }
 
-    await this.messageService.replyWithPaginatedEmbed(embeds, message, page);
+    return this.coreMessageService.sendHelpMessage(message);
   }
 
   private allParam(args: Arguments) {

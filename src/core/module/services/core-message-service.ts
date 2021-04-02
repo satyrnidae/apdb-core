@@ -1,25 +1,35 @@
 import { injectable, inject } from "inversify";
-import { ServiceIdentifiers, Logger, ILoggingService, IConfigurationService, IClientService, IDataService, IMessageService } from "@satyrnidae/apdb-api";
-import { Guild, Client, GuildMember, TextChannel, Message } from "discord.js";
+import { ServiceIdentifiers, IConfigurationService, IClientService, IDataService, IMessageService, ICommandService, Module, IModuleService, Command } from "@satyrnidae/apdb-api";
+import { Guild, Client, GuildMember, TextChannel, Message, EmojiResolvable, MessageEmbed } from "discord.js";
 import { GuildConfiguration } from "../../../db/entity/guild-configuration";
-import { toOne, OneOrMany } from "@satyrnidae/apdb-utils";
+import { toOne, OneOrMany, pickRandom, toMany, forEachAsync } from "@satyrnidae/apdb-utils";
 import { IAppConfiguration } from "../../services/configuration/app-configuration";
 
+const MAX_FIELD_CHARS = 1024;
+
+/**
+ * Handles sending / translating all canned messages for the core components of the bot.
+ */
 @injectable()
 export class CoreMessageService {
-  // this is gonna be hell
-  private readonly log: Logger;
+  /**
+   * The discord.js client instance.
+   */
   private readonly client: Client;
 
   constructor(@inject(ServiceIdentifiers.Data) private readonly dataService: IDataService,
     @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService<IAppConfiguration>,
-    @inject(ServiceIdentifiers.Logging) loggingService: ILoggingService,
-    @inject(ServiceIdentifiers.Client) clientService: IClientService,
-    @inject(ServiceIdentifiers.Message) private readonly messageService: IMessageService) {
-    this.log = loggingService.getLogger('core');
+    @inject(ServiceIdentifiers.Command) private readonly commandService: ICommandService,
+    @inject(ServiceIdentifiers.Message) private readonly messageService: IMessageService,
+    @inject(ServiceIdentifiers.Module) private readonly moduleService: IModuleService,
+    @inject(ServiceIdentifiers.Client) clientService: IClientService) {
     this.client = clientService.getClient();
   }
 
+  /**
+   * Sends a welcome message to a guild.
+   * @param guild The guild which the message will be sent to
+   */
   public async sendGuildWelcomeMessage(guild: Guild): Promise<void> {
     if (!(await this.configurationService.get('showWelcomeMessage'))) {
       return;
@@ -37,7 +47,165 @@ export class CoreMessageService {
     }
   }
 
+  /**
+   * Replies to a message with a canned message indicating that the command could not be sent in the channel.
+   * @param replyTo The message to reply to.
+   * @returns One or many messages which were sent by the bot.
+   */
+  public async sendCommandCannotExecuteInNewsChannelMessage(replyTo: Message): Promise<void> {
+    // TODO: Translate messages
+    await this.messageService.reply(replyTo, 'I can\'t run that command in a news channel!');
+  }
+
+  /**
+   * Replies to a message with the canned help message.
+   * @param replyTo The message to reply to.
+   * @returns One or many messages that were sent by the bot.
+   */
+  public async sendHelpMessage(replyTo: Message): Promise<void> {
+    // TODO: Translate messages
+    const name: string = replyTo.guild ? replyTo.guild.me.displayName : this.client.user.username;
+    const prefix: string = await this.commandService.getCommandPrefix(replyTo.guild);
+    const randomHeart: EmojiResolvable = pickRandom(await this.configurationService.get('hearts'));
+    const helpMessage: string = `Hi! I'm ${name}, your modular robot friend!\r\n`
+      .concat(`To list all the commands that I can understand, just send the command \`${prefix}help --all\` somewhere i can see it!\r\n`)
+      .concat(`You can also check out my core documentation on <https://www.github.com/satyrnidae/apdb-core>.\r\n`)
+      .concat(`Thanks! ${randomHeart}`);
+
+    await this.messageService.reply(replyTo, helpMessage);
+  }
+
+  /**
+   * Returns a paginated embed containing all of the available commands filtered by module.
+   * @param replyTo The message to reply to.
+   * @param page The initial page to start on.
+   * @returns
+   */
+  public async sendPaginatedHelpMessage(replyTo: Message, moduleId: string, commandId: string, page: number): Promise<void> {
+    let modules: Module[] = toMany(await this.moduleService.getAllModules(replyTo.guild));
+
+    if (moduleId) {
+      modules = modules.filter(module => module.moduleInfo.id.toLowerCase() === moduleId.toLowerCase());
+    }
+
+    if (!modules.length) {
+      await this.messageService.reply(replyTo, 'I apologize, but I couldn\'t find anything that matched those options!');
+      return;
+    }
+
+    const embeds: MessageEmbed[] = [];
+    const prefix: string = await this.commandService.getCommandPrefix(replyTo.guild);
+
+    await forEachAsync(modules, async (module: Module) => {
+      const commands: Command[] = toMany(await this.commandService.getAll(module.moduleInfo.id, replyTo.guild));
+      if (commandId) {
+        embeds.push(...this.createCommandInfoEmbeds(module, commandId, commands, prefix));
+      } else {
+        embeds.push(...this.createModuleInfoEmbeds(module, commands, prefix));
+      }
+    });
+
+    await this.messageService.replyWithPaginatedEmbed(embeds, replyTo, 'Here\'s what I found:', page);
+  }
+
+  private createCommandInfoEmbeds(module: Module, commandId: string, commands: Command[], prefix: string): MessageEmbed[] {
+    const embeds: MessageEmbed[] = [];
+    commands.filter(command => command.command.toLowerCase() === commandId.toLowerCase()).forEach(command => {
+      const embed: MessageEmbed = new MessageEmbed()
+        .setAuthor(module.moduleInfo.name, module.moduleInfo.details.thumbnail,module.moduleInfo.details.website)
+        .setTitle(`${command.friendlyName} Command`)
+        .setDescription(command.description)
+        .setFooter('')
+        .addField('Module', module.moduleInfo.name, true)
+        .addField('Version', module.moduleInfo.version, true)
+        .addField('API', module.moduleInfo.details.apiVersion, true)
+        .addField('Syntax', `\`\`\`${command.syntax.map(syntax => `${prefix}${syntax}`).join('\n')}\`\`\``, false);
+      this.addAuthorField(embed, module);
+      this.addFundingField(embed, module);
+      embeds.push(embed);
+    });
+    return embeds;
+  }
+
+  private addMultilineField(embed: MessageEmbed, fieldName: string, startingString: string, noValuesString: string, items: string[]): void {
+    if (items.length) {
+      let fieldValue: string = startingString;
+      for (const item of items) {
+        if (fieldValue.length + item.length > MAX_FIELD_CHARS) {
+          continue;
+        }
+        fieldValue = fieldValue.concat('\n',item);
+      }
+      if (fieldValue === startingString) {
+        fieldValue = noValuesString;
+      }
+
+      embed.addField(fieldName, fieldValue, false);
+    }
+  }
+
+  private addFundingField(embed: MessageEmbed, module: Module): void {
+    return this.addMultilineField(
+      embed,
+      'Donate',
+      '',
+      '*Check this module\'s package.json file for the donation link.*',
+      toMany(module.moduleInfo.details.donate)
+    )
+  }
+
+  private addAuthorField(embed: MessageEmbed, module: Module): void {
+    return this.addMultilineField(
+      embed,
+      'Author',
+      '',
+      'Check this module\'s package.json file for the contributor names.',
+      toMany(module.moduleInfo.details.authors)
+    )
+  }
+
+  private createModuleInfoEmbed(module: Module, commands: string): MessageEmbed {
+    const embed: MessageEmbed = new MessageEmbed()
+      .setAuthor(module.moduleInfo.name, module.moduleInfo.details.thumbnail,module.moduleInfo.details.website)
+      .setDescription(module.moduleInfo.details.description)
+      .setFooter('')
+      .addField('Version', module.moduleInfo.version, true)
+      .addField('API', module.moduleInfo.details.apiVersion, true)
+      .addField('Commands', commands, false);
+    this.addAuthorField(embed, module);
+    this.addFundingField(embed, module);
+    embed
+
+    return embed;
+  }
+
+  private createModuleInfoEmbeds(module: Module, commands: Command[], prefix: string): MessageEmbed[] {
+    const embeds: MessageEmbed[] = [];
+    let commandList: string = '';
+
+    if (commands.length) {
+      commands.forEach(command => {
+        const description: string = `\`${prefix}${command.command}\`: ${command.description}`;
+        if (commandList.length + description.length + 1 <= MAX_FIELD_CHARS) {
+          commandList = commandList.concat('\n',description);
+        } else {
+          embeds.push(this.createModuleInfoEmbed(module, commandList));
+          commandList = description;
+        }
+      });
+    } else {
+      commandList = '*This module does not provide any commands.*'
+    }
+
+    if (commandList) {
+      embeds.push(this.createModuleInfoEmbed(module, commandList));
+    }
+
+    return embeds;
+  }
+
   private async sendWelcomeMessage(me: GuildMember, channel: TextChannel, commandPrefix: string): Promise<OneOrMany<Message>> {
+    // TODO: Translate messages
     const text: string = `Hello everyone! ${me.displayName} here.\r\n` +
       `I'm a modular bot framework, with a potential variety of functions!\r\n` +
       `Feel free to ask for \`${commandPrefix}help\` if you're interested in learning more!`;
