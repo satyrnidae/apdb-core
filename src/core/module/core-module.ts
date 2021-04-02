@@ -5,6 +5,7 @@ import { CommandHandler } from "./events/command-handler";
 import { HelpCommand } from "./commands/help-command";
 import { DeleteReactionHandler } from "./events/delete-reaction-handler";
 import { Candidates } from "../../core/services/module/candidate-validation";
+import { SetPrefixCommand } from "./commands/set-prefix-command";
 
 export class CoreModule extends Module {
 
@@ -27,7 +28,8 @@ export class CoreModule extends Module {
 
   public async preInitialize(): Promise<void> {
     this.commands.push(...[
-      new HelpCommand('core')
+      new HelpCommand('core'),
+      new SetPrefixCommand('core')
     ]);
     this.events.push(...[
       new ReadyHandler('core'),
