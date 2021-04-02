@@ -23,7 +23,7 @@ export class CommandService implements ICommandService {
   public async get(command: string, moduleId?: string, guild?: Guild): Promise<OneOrMany<Command>> {
     const commands: Command[] = toMany(await this.getAll(moduleId, guild));
 
-    return commands.filter(entry => entry.command === command);
+    return commands.filter(entry => entry.command.toLowerCase() === command.toLowerCase());
   }
 
   public async getAll(moduleId?: string, guild?: Guild): Promise<OneOrMany<Command>> {
@@ -40,7 +40,7 @@ export class CommandService implements ICommandService {
         ? guildConfiguration.moduleOptions.filter(value => value && !value.disabled).map(value => value.commands).flat().filter(value => value.disabled) : [];
 
       commands = commands.filter(entry => !disabledModules.includes(entry.moduleId)
-        && !(disabledCommands.filter(value => value.command === entry.command && value.module.moduleId === entry.moduleId).length));
+        && !(disabledCommands.filter(value => value.command.toLowerCase() === entry.command.toLowerCase() && value.module.moduleId === entry.moduleId).length));
     }
 
     return commands;
@@ -69,7 +69,7 @@ export class CommandService implements ICommandService {
     }
 
     return CommandMutex.dispatch(async (): Promise<boolean> => {
-      if (Commands.filter(registeredCommand => registeredCommand.moduleId === command.moduleId && registeredCommand.command === command.command).length) {
+      if (Commands.filter(registeredCommand => registeredCommand.moduleId === command.moduleId && registeredCommand.command.toLowerCase() === command.command.toLowerCase()).length) {
         console.trace(`Skipped registration of duplicate command ${command.moduleId}/${command.command}`);
         return false;
       }
