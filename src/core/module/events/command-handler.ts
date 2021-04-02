@@ -74,7 +74,6 @@ export class CommandHandler extends MessageEventHandler {
     }
 
     if (!command) {
-      //TODO: Message notifying of failed command execution
       log.debug(`${senderId} could not execute command ${moduleId}:${commandText} ${parsedMessage.arguments.join(' ')}: invalid command`);
       return;
     }
