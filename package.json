@@ -15,7 +15,18 @@
     "bot",
     "plugin"
   ],
-  "author": "Isabel Maskrey (satyrnidae)",
+  "author": {
+    "name": "Isabel Maskrey",
+    "email": "isabel@satyrn.dev",
+    "url": "https://satyrn.dev"
+  },
+  "funding": [
+    {
+      "type": "patreon",
+      "url": "https://patreon.com/satyrnidae"
+    },
+    "https://ko-fi.com/satyrnidae"
+  ],
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/satyrnidae/apdb-core/issues"
@@ -23,7 +34,7 @@
   "homepage": "https://github.com/satyrnidae/apdb-core#readme",
   "dependencies": {
     "@discordjs/uws": "^10.149.0",
-    "@satyrnidae/apdb-api": "2.13.1",
+    "@satyrnidae/apdb-api": "2.13.3",
     "@satyrnidae/apdb-utils": "0.0.8",
     "adm-zip": "^0.4.16",
     "better-sqlite3": "^7.1.0",
