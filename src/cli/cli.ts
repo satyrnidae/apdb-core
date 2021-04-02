@@ -1,10 +1,11 @@
-import { Container, IClientService, IConfigurationService, ILoggingService, IMessageService, IModuleService, Logger, Module, ServiceIdentifiers } from '@satyrnidae/apdb-api';
-import { IAppConfiguration } from '../core/services/configuration/app-configuration';
+import { Container, IClientService, ILoggingService, IMessageService, IModuleService, lazyInject, Logger, Module, ServiceIdentifiers } from '@satyrnidae/apdb-api';
 import * as srvLine from 'serverline';
 import { ICliCommand } from './cli-command';
 import yparser, { Options, Arguments } from 'yargs-parser';
-import { toMany, toOne } from '@satyrnidae/apdb-utils';
-import { Channel, Client, DMChannel, Guild, TextChannel } from 'discord.js';
+import { LogLevel, toMany, toOne } from '@satyrnidae/apdb-utils';
+import { Channel, Client, Guild, TextChannel } from 'discord.js';
+
+require('./format');
 
 /**
  * Command line interface module for interacting with the bot while it's running.
@@ -16,6 +17,10 @@ export class Cli {
    */
   private readonly log: Logger;
   /**
+   * The discord.js client instance.
+   */
+  private readonly client: Client;
+  /**
    * A list of all commands registered with the CLI.
    */
   private readonly commands: ICliCommand[] = [];
@@ -23,21 +28,41 @@ export class Cli {
    * Whether or not the CLI has been initialized.
    */
   private initialized: boolean = false;
+  /**
+   * The logging service instance.
+   */
+  @lazyInject(ServiceIdentifiers.Logging)
+  private readonly loggingService!: ILoggingService;
+  /**
+   * The message service instance.
+   */
+  @lazyInject(ServiceIdentifiers.Message)
+  private readonly messageService!: IMessageService;
+  /**
+   * The module service instance.
+   */
+  @lazyInject(ServiceIdentifiers.Module)
+  private readonly moduleService!: IModuleService;
 
-  constructor(private readonly configurationService: IConfigurationService<IAppConfiguration>,
-              private readonly loggingService: ILoggingService) {
+  /**
+   * Creates a new command line interpreter session.
+   */
+  constructor() {
+    this.client = Container.get<IClientService>(ServiceIdentifiers.Client).getClient();
     this.log = this.loggingService.getLogger('cli');
   }
 
   /**
    * Initializes the CLI. This should only be called once.
    */
-  public async initialize(): Promise<void> {
+  public async init(): Promise<void> {
     // Return if we are already initialized.
     if (this.initialized) {
       this.log.error('CLI is already initialized!');
       return;
     }
+
+    this.log.info('Starting CLI subsystem...')
 
     // User input init
     srvLine.init();
@@ -58,24 +83,32 @@ export class Cli {
        * Command which exits the program when it is called
        */
       <ICliCommand>{
-        command: ['quit', 'q'],
-        commandOptions: <Options>{
+        aliases: ['quit', 'q', 'exit', 'stop'],
+        options: <Options>{
           alias: {
             force: ['-f']
           },
           boolean: ['force']
         },
-        syntax: ['quit [-f|--force]','q [-f|--force]'],
-        description: 'Shuts down the bot and exits the program.',
+        syntax: [
+          'quit'.b().concat(' [-f|--force]'.dim()).r(),
+          'q'.b().concat(' [-f|--force]'.dim()).r(),
+          'exit'.b().concat(' [-f|--force]'.dim()).r(),
+          'stop'.b().concat(' [-f|--force]'.dim()).r()
+        ],
+        description: [
+          'Shuts down the bot and exits the program.',
+          ' - '.concat('force: Optional. Forces the program to shut down without confirmation.'.dim().r())
+        ],
         /**
          * Handles the quit command.
          */
         handle: async (args: Arguments): Promise<void> => {
           if (!args['force']) {
             let quit: boolean = false;
-            await new Promise<void>(resolve => srvLine.question('Really quit? [y/N]: ', (answer: string) => {
+            await new Promise<void>(resolve => srvLine.question('Are you sure you wish to exit? '.concat('[y/N]'.dim().r(),': '), (answer: string) => {
               quit = answer.match(/^y(es)?$/i) ? true : false;
-              process.stdout.write('\x1B[1K> ');
+              process.stdout.write('> '.return());
               resolve();
             }));
             if (!quit) {
@@ -89,18 +122,21 @@ export class Cli {
        * Command which provides syntax help for other commands
        */
       <ICliCommand>{
-        command: ['help', '?'],
-        commandOptions: <Options>{
+        aliases: ['help', '?'],
+        options: <Options>{
           alias: {
             command: ['-c']
           },
           string: ['command']
         },
         syntax: [
-          'help [[-c|--command] command]',
-          '? [[-c|--command] command]'
+          'help'.b().concat(' [[-c|--command] '.concat('command'.i().r(),']').dim()).r(),
+          'h'.b().concat(' [[-c|--command] '.concat('command'.i().r(),']').dim()).r()
         ],
-        description: 'Gets information about the commands available in the command line environment.',
+        description: [
+          'Gets information about the commands available in the command line environment.',
+          ' - '.concat('command: The command you wish to learn about.'.dim()).r()
+        ],
         /**
          * Handles the help command.
          * @param args The command arguments.
@@ -110,13 +146,14 @@ export class Cli {
           const output: string[] = [];
 
           if (commandName) {
-            const command: ICliCommand = this.commands.find(value => toMany(value.command).find(name => name.toLowerCase() === commandName.toLowerCase()));
+            const command: ICliCommand = this.commands.find(value => toMany(value.aliases).find(name => name.toLowerCase() === commandName.toLowerCase()));
             if (command) {
-              output.push(`\x1b[1mCommand aliases:\x1b[0m ${toMany(command.command).join(' \x1b[2m/\x1b[0m ')}`);
-              output.push('\x1b[1mDescription:\x1b[0m');
-              toMany(command.description).forEach(line => output.push(`\x1b[2m  ${line}\x1b[0m`));
-              output.push('\x1b[1mSyntax:\x1b[0m');
-              toMany(command.syntax).forEach(line => output.push(`  ${line}`));
+              output.push('Command aliases: '.b().concat(toMany(command.aliases).join('|'.dim().r()).b()).r());
+              output.push('Description:'.b().r());
+              toMany(command.description).forEach(line => output.push(`  ${line}`));
+              output.push('Syntax:'.b().r());
+              toMany(command.syntax).forEach(line => output.push(`   - ${line}`));
+              output.push('');
 
               this.writeMore(...output);
               return;
@@ -124,8 +161,14 @@ export class Cli {
             this.log.error(`Unknown command: ${commandName}`);
           }
 
-          output.push('\x1b[1mAvailable commands:\x1b[0m');
-          this.commands.forEach(command => output.push(` \x1b[2m-\x1b[0m ${toMany(command.command).join(' \x1b[2m/\x1b[0m ')}`));
+          output.push('Available commands:'.b().r());
+          this.commands.forEach(command =>
+            output.push(' - '.dim().r().concat(
+              toMany(command.aliases).join('|'.dim().r()).b()).r().concat(
+                toMany(command.description).length ? `: ${toOne(command.description)}` : ''
+              )
+            )
+          );
           await this.writeMore(...output);
         }
       },
@@ -133,10 +176,13 @@ export class Cli {
        * Command which outputs the program version
        */
       <ICliCommand>{
-        command: ['version', 'v'],
-        commandOptions: <Options>{},
+        aliases: ['version', 'v'],
+        options: <Options>{},
         description: 'Outputs the program version.',
-        syntax: ['version', 'v'],
+        syntax: [
+          'version'.b().r(),
+          'v'.b().r()
+        ],
         /**
          * Handles the version command.
          */
@@ -145,51 +191,97 @@ export class Cli {
           console.log(`API Version ${(global as any).apiVersion}`);
         }
       },
+      /**
+       * Command which returns authorial information, connected clients, and loaded modules.
+       */
       <ICliCommand>{
-        command: ['about', 'a'],
-        commandOptions: <Options>{},
-        description: 'Returns authorial information and loaded modules.',
-        syntax: ['about', 'a'],
+        aliases: ['about', 'a'],
+        options: {},
+        description: 'Returns authorial information, connected clients, and loaded modules.',
+        syntax: [
+          'about'.b().r(),
+          'a'.b().r()
+        ],
+        /**
+         * Handles the about command.
+         */
         handle: async(): Promise<void> => {
           const output: string[] = [];
 
-          output.push('\x1b[1mAnother Pluggable Discord Bot\x1b[0m');
-          output.push(`Version ${(global as any).version} (API: ${(global as any).apiVersion})`);
-          output.push('\x1b[2mCopyright © 2019-2021 Isabel Maskrey. Some rights reserved.\x1b[0m');
+          output.push('Another Pluggable Discord Bot'.b().r());
+          output.push(`Version ${(global as any).version} `.concat(
+            `(API: ${(global as any).apiVersion})`.i().r()
+          ));
+          output.push('Copyright © 2019-2021 Isabel Maskrey. Some rights reserved.'.dim().r());
           output.push('');
-          output.push('Loaded modules:');
+          if (this.client.user) {
+            output.push('Currently logged in as '.concat(
+              this.client.user.tag.b().r(),
+              '.'
+            ));
+            output.push(`Bot is active in at least ${this.client.guilds.cache.array().length.toString().bold().r()} guild(s).*`);
+            output.push(' * Guild count may vary due to caching.'.dim().r());
+            output.push('');
+          }
+          output.push('Loaded modules:'.u().r());
+          output.push('');
 
-          const moduleService: IModuleService = Container.get<IModuleService>(ServiceIdentifiers.Module);
-
-          const modules: Module[] = toMany(await moduleService.getAllModules());
+          const modules: Module[] = toMany(await this.moduleService.getAllModules());
           modules.forEach(module => {
-            output.push(`\x1b[1m${module.moduleInfo.name||module.moduleInfo.id}\x1b[0m`);
-            output.push(`  by \x1b[1m${(module.moduleInfo.details.authors.join(', ')) || 'Unknown'}\x1b[0m`);
-            output.push(`  v${module.moduleInfo.version} (API: ${module.moduleInfo.details.apiVersion})`);
-            output.push(`  Website: ${module.moduleInfo.details.website || 'none specified.'}`);
-            output.push(`  Description: ${module.moduleInfo.details.description || 'none available.'}`);
+            output.push('  '.concat((module.moduleInfo.name||module.moduleInfo.id).b()).r());
+            output.push(`  by ${((toMany(module.moduleInfo.details.authors).join(',')) || 'Unknown').b()}`.r());
+            output.push(`  Version ${module.moduleInfo.version} `.concat(`(API: ${module.moduleInfo.details.apiVersion})`.i()).r());
+            if (module.moduleInfo.details.website) {
+              output.push('    Website: '.b().r().concat(module.moduleInfo.details.website.brightBlue().u()).r());
+            }
+            if (module.moduleInfo.details.description) {
+              output.push('    Description: '.b().r().concat(module.moduleInfo.details.description));
+            }
+            if (module.moduleInfo.details.path) {
+              let text: string = `    Module loaded from ${module.moduleInfo.details.path}`;
+
+              if (module.moduleInfo.details.entryPoint) {
+                text = `${text}/${module.moduleInfo.details.entryPoint}`;
+              }
+              output.push(`${text.dim()}`.r());
+            }
             output.push('');
           });
 
           await this.writeMore(...output);
         }
       },
+      /**
+       * Evaluates javascript code from the command line.
+       */
       <ICliCommand>{
-        command: 'eval',
-        commandOptions: {},
+        aliases: 'eval',
+        options: {},
         description: 'Evaluates a line of javascript code.',
-        syntax: 'eval "code"',
+        syntax: 'eval'.bold().reset().concat(' "code"'),
+        /**
+         * Handles the eval command.
+         * @param args The command arguments.
+         */
         handle: async(args: Arguments): Promise<void> => {
           try {
-            console.log(`Result: ${eval(args._.join(' '))}`);
+            const result: any = eval(args._.join(' '));
+            if (result !== undefined) {
+              console.log(`Snippet evaluated successfully. Result: ${result}`.dim().r());
+            } else {
+              console.log('Snippet evaluated successfully.'.dim().r());
+            }
           } catch (err) {
             this.log.error(err);
           }
         }
       },
+      /**
+       * Sends a message to a guild.
+       */
       <ICliCommand>{
-        command: 'send',
-        commandOptions: <Options>{
+        aliases: 'send',
+        options: <Options>{
           alias: {
             guild: ['-g'],
             channel: ['-c'],
@@ -199,8 +291,18 @@ export class Cli {
           string: ['guild','channel','message'],
           boolean: ['force']
         },
-        description: 'Sends a message to a specific guild and channel. The message will be marked as sent from the console.',
-        syntax: 'send {-g|--guild} guild {-c|--channel} channel [-m|--message] message',
+        description: [
+          'Sends a message to a specific guild and channel. The message will be marked as sent from the console.',
+          ' - '.concat('guild: The ID of the guild to send the message to.'.dim()).r(),
+          ' - '.concat('channel: The ID of the channel to send the message in.'.dim()).r(),
+          ' - '.concat('message: The message you wish to send.'.dim()).r(),
+          ' - '.concat('force: If specified, confirmation messages will be skipped. USE WITH CAUTION.'.dim()).r()
+        ],
+        syntax: 'send'.b().r().concat('{-g|--guild} guild {-c|--channel} ','channel '.i().r(),'[-m|--message] '.dim().r(),'message '.i().r(),'[-f|--force]'.dim().r()),
+        /**
+         * Handles the send command.
+         * @param args The command arguments.
+         */
         handle: async (args: Arguments): Promise<void> => {
           const guildId: string = args['guild'];
           const channelId: string = args['channel']
@@ -209,8 +311,7 @@ export class Cli {
           if (!message) {
             this.log.error('Cannot send an empty message!');
           }
-          const client: Client = Container.get<IClientService>(ServiceIdentifiers.Client).getClient();
-          const guild: Guild = await client.guilds.fetch(guildId, true);
+          const guild: Guild = await this.client.guilds.fetch(guildId, true);
           if (!guild) {
             this.log.error('Cannot send message: The specified guild was not found!');
           }
@@ -221,23 +322,101 @@ export class Cli {
           const textChannel: TextChannel = channel as TextChannel;
           if (!force) {
             let cancel: boolean = false;
-            await new Promise<void>(resolve => srvLine.question(`Send your message to "${guild.name}" in channel #${textChannel.name}? [y/N]:`, (answer: string) => {
-              cancel = answer.match(/^y(es)?$/i) ? false : true;
-              process.stdout.write('\x1B[1K> ');
-              resolve();
-            }));
+            await new Promise<void>(
+              resolve => srvLine.question(`Send your message to ${guild.name} in channel #${textChannel.name}? `.concat('[y/N]'.dim().r(),': '),
+              (answer: string) => {
+                cancel = answer.match(/^y(es)?$/i) ? false : true;
+                process.stdout.write('> '.return());
+                resolve();
+              })
+            );
             if (cancel) {
               return;
             }
           }
-          const messageService: IMessageService = Container.get<IMessageService>(ServiceIdentifiers.Message);
-          await messageService.send(textChannel, `*Note: this message was sent via the bot's command line.*\n${message}`);
+          // TODO: Translate this message based on guild language preferences
+          await this.messageService.send(textChannel, `*Note: this message was sent via the bot's command line.*\n${message}`);
           this.log.info('Message sent!');
+        }
+      },
+      /**
+       * Clears the CLI screen.
+       */
+      <ICliCommand>{
+        aliases: ['clear', 'cls'],
+        options: {},
+        description: 'Clears the log from the console.',
+        syntax: [
+          'clear'.b().r(),
+          'cls'.b().r()
+        ],
+        /**
+         * Handles the clear command.
+         */
+        handle: async (): Promise<void> => {
+          process.stdout.write('Another Pluggable Discord Bot'.b().concat('\n').r().clear());
+          process.stdout.write(`Version ${(global as any).version} `.concat(`(API: ${(global as any).apiVersion})`.r(),'\n').r());
+          process.stdout.write('Copyright © 2019-2021 Isabel Maskrey. Some rights reserved.'.dim().concat('\n\n').r());
+          process.stdout.write('>'.return());
+        }
+      },
+      /**
+       * Sets the verbosity of a given loger.
+       */
+      <ICliCommand>{
+        aliases: ['verbosity','logconf','logger','loglevel','log'],
+        options: <Options>{
+          alias: {
+            logger: ['-l','--log'],
+            level: ['-v']
+          },
+          string: ['logger', 'level']
+        },
+        description: [
+          'Sets the logging level of a given logger.',
+          ' - '.concat('logger: The name of the logger to alter.'.dim()).r(),
+          ' - '.concat('level: The logging level to set. Choose from "trace", "debug", "info", "warn", and "error".'.dim()).r()
+        ],
+        syntax: [
+          'verbosity'.b().r().concat(' [-l|--log|--logger]'.dim().r(),' logger '.i().r(),'[-v|--level]'.dim().r(),' {trace|debug|info|warn|error}'.i().r()),
+          'logconf'.b().r().concat(' [-l|--log|--logger]'.dim().r(),' logger '.i().r(),'[-v|--level]'.dim().r(),' {trace|debug|info|warn|error}'.i().r()),
+          'logger'.b().r().concat(' [-l|--log|--logger]'.dim().r(),' logger '.i().r(),'[-v|--level]'.dim().r(),' {trace|debug|info|warn|error}'.i().r()),
+          'loglevel'.b().r().concat(' [-l|--log|--logger]'.dim().r(),' logger '.i().r(),'[-v|--level]'.dim().r(),' {trace|debug|info|warn|error}'.i().r()),
+          'log'.b().r().concat(' [-l|--log|--logger]'.dim().r(),' logger '.i().r(),'[-v|--level]'.dim().r(),' {trace|debug|info|warn|error}'.i().r())
+        ],
+        /**
+         * Handles the verbosity command.
+         * @param args The command arguments.
+         */
+        handle: async (args: Arguments): Promise<void> => {
+          let logger: string = args.logger || args._[0];
+          const level: string = args.level || (args.logger ? args._[0] : args._[1]);
+
+          if (!logger) {
+            this.log.error('You must specify a logger name!');
+            return;
+          }
+          logger = logger.toLowerCase();
+
+          if (!(level && Object.values(LogLevel).includes(level.toLowerCase()))) {
+            this.log.error('You must specify a valid log level!');
+            return;
+          }
+          const logLevel: keyof typeof LogLevel = <keyof typeof LogLevel>level.toLowerCase();
+
+          this.loggingService.getLogger(logger).setLogLevel(logLevel);
+          this.log.info(`Successfully updated log level for logger ${logger} to ${logLevel}.`);
         }
       }
     );
+    this.commands.sort((left, right) => toMany(left.aliases)[0] > toMany(right.aliases)[0] ? 1 : -1);
+    this.log.info('CLI subsystem loaded.');
   }
 
+  /**
+   * Writes paginated output to the console.
+   * @param content The data to write to the log.
+   */
   private async writeMore(...content: string[]): Promise<void> {
     const rows: number = process.stdout.getWindowSize()[1];
     const outputRows: number = Math.max(rows - 1, 2);
@@ -247,9 +426,9 @@ export class Cli {
       output.forEach(line => console.log(line));
       if (content.length > 0) {
         let quit: boolean = false;
-        await new Promise<void>(resolve => srvLine.question('(enter to read more, q to cancel...) ', (answer: string) => {
+        await new Promise<void>(resolve => srvLine.question('(enter to read more, q to cancel...) '.dim().r(), (answer: string) => {
           quit = answer.match(/^q(uit)?$/i) ? true : false;
-          process.stdout.write('\x1B[1K> ');
+          process.stdout.write('> '.return());
           resolve();
         }));
         if (quit) {
@@ -279,12 +458,12 @@ export class Cli {
       return p;
     }, { a: [''] }).a.slice(1); //split(/\s+/).slice(1).filter(value => value.match(/\S+/));
     // Find a command which matches the input command name.
-    const cliCommand: ICliCommand = this.commands.find(entry => toMany(entry.command).find(name => name.toLowerCase() === commandName));
+    const cliCommand: ICliCommand = this.commands.find(entry => toMany(entry.aliases).find(name => name.toLowerCase() === commandName));
     if (!cliCommand) {
       return false;
     }
     // Parse args
-    const argv: Arguments = yparser(commandArgs, cliCommand.commandOptions);
+    const argv: Arguments = yparser(commandArgs, cliCommand.options);
     await cliCommand.handle(argv);
     return true;
   }

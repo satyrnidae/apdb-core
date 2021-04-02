@@ -10,11 +10,11 @@ export interface ICliCommand {
    * or only the first command in the list with a matched alias will count.
    * Words or hyphenated words allowed. No spaces.
    */
-  command: OneOrMany<string>;
+  aliases: OneOrMany<string>;
   /**
    * Yargs parser options for this command.
    */
-  commandOptions: Options;
+  options: Options;
   /**
    * The command syntax. Must follow command-line documentation standards.
    */
