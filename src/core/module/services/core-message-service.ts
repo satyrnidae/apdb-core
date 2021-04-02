@@ -156,7 +156,7 @@ export class CoreMessageService {
         .addField('Module', module.moduleInfo.name, true)
         .addField('Version', module.moduleInfo.version, true)
         .addField('API', module.moduleInfo.details.apiVersion, true)
-        .addField('Syntax', `\`\`\`${command.syntax.map(syntax => `${prefix}${syntax}`).join('\n')}\`\`\``, false);
+        .addField('Syntax', `\`\`\`${toMany(command.syntax).map(syntax => `${prefix}${syntax}`).join('\n')}\`\`\``, false);
       this.addAuthorField(embed, module);
       this.addFundingField(embed, module);
       embeds.push(embed);
