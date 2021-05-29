@@ -1,6 +1,6 @@
 import { injectable, inject } from "inversify";
 import { ServiceIdentifiers, IConfigurationService, IClientService, IDataService, IMessageService, ICommandService, Module, IModuleService, Command } from "@satyrnidae/apdb-api";
-import { Guild, Client, GuildMember, TextChannel, Message, EmojiResolvable, MessageEmbed, DMChannel } from "discord.js";
+import { Guild, Client, GuildMember, TextChannel, Message, EmojiResolvable, MessageEmbed, DMChannel, Permissions } from "discord.js";
 import { GuildConfiguration } from "../../../db/entity/guild-configuration";
 import { toOne, OneOrMany, pickRandom, toMany, forEachAsync } from "@satyrnidae/apdb-utils";
 import { IAppConfiguration } from "../../services/configuration/app-configuration";
@@ -157,6 +157,15 @@ export class CoreMessageService {
         .addField('Version', module.moduleInfo.version, true)
         .addField('API', module.moduleInfo.details.apiVersion, true)
         .addField('Syntax', `\`\`\`${toMany(command.syntax).map(syntax => `${prefix}${syntax}`).join('\n')}\`\`\``, false);
+      if (command.longDescription) {
+        embed.addField('Remarks', command.longDescription, false);
+      }
+      if (command.permissions) {
+        const permissions: Permissions = new Permissions(command.permissions);
+        if (permissions.bitfield > 0) {
+          embed.addField('Permission Flags', `${permissions.bitfield}\n*See https://discord.com/developers/docs/topics/permissions for details.*`, false);
+        }
+      }
       this.addAuthorField(embed, module);
       this.addFundingField(embed, module);
       embeds.push(embed);
