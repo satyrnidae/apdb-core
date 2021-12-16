@@ -1,9 +1,12 @@
-import { Container, IClientService, ILoggingService, IMessageService, IModuleService, lazyInject, Logger, Module, ServiceIdentifiers } from '@satyrnidae/apdb-api';
+import { Container, IClientService, ILoggingService, IMessageService, IModuleService, Logger, Module, ServiceIdentifiers } from '@satyrnidae/apdb-api';
 import * as srvLine from 'serverline';
 import { ICliCommand } from './cli-command';
 import yparser, { Options, Arguments } from 'yargs-parser';
 import { LogLevel, toMany, toOne } from '@satyrnidae/apdb-utils';
 import { Channel, Client, Guild, TextChannel } from 'discord.js';
+import { inject } from 'inversify';
+import { injectable } from 'inversify';
+
 
 require('./format');
 
@@ -11,6 +14,7 @@ require('./format');
  * Command line interface module for interacting with the bot while it's running.
  * This is ugly as sin but as a hacked-together afterthought it gets the job done.
  */
+@injectable()
 export class Cli {
   /**
    * The CLI logger.
@@ -28,26 +32,13 @@ export class Cli {
    * Whether or not the CLI has been initialized.
    */
   private initialized: boolean = false;
-  /**
-   * The logging service instance.
-   */
-  @lazyInject(ServiceIdentifiers.Logging)
-  private readonly loggingService!: ILoggingService;
-  /**
-   * The message service instance.
-   */
-  @lazyInject(ServiceIdentifiers.Message)
-  private readonly messageService!: IMessageService;
-  /**
-   * The module service instance.
-   */
-  @lazyInject(ServiceIdentifiers.Module)
-  private readonly moduleService!: IModuleService;
 
   /**
    * Creates a new command line interpreter session.
    */
-  constructor() {
+  constructor(@inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService,
+              @inject(ServiceIdentifiers.Message) private readonly messageService: IMessageService,
+              @inject(ServiceIdentifiers.Module) private readonly moduleService: IModuleService) {
     this.client = Container.get<IClientService>(ServiceIdentifiers.Client).getClient();
     this.log = this.loggingService.getLogger('cli');
   }
@@ -219,7 +210,7 @@ export class Cli {
               this.client.user.tag.b().r(),
               '.'
             ));
-            output.push(`Bot is active in at least ${this.client.guilds.cache.array().length.toString().bold().r()} guild(s).*`);
+            output.push(`Bot is active in at least ${this.client.guilds.cache.size.toString().bold().r()} guild(s).*`);
             output.push(' * Guild count may vary due to caching.'.dim().r());
             output.push('');
           }
@@ -311,7 +302,7 @@ export class Cli {
           if (!message) {
             this.log.error('Cannot send an empty message!');
           }
-          const guild: Guild = await this.client.guilds.fetch(guildId, true);
+          const guild: Guild = await this.client.guilds.fetch(guildId);
           if (!guild) {
             this.log.error('Cannot send message: The specified guild was not found!');
           }
@@ -335,7 +326,7 @@ export class Cli {
             }
           }
           // TODO: Translate this message based on guild language preferences
-          await this.messageService.send(textChannel, `*Note: this message was sent via the bot's command line.*\n${message}`);
+          await this.messageService.send(textChannel, `${message}\n*Note: this message was sent via the bot's command line.*`);
           this.log.info('Message sent!');
         }
       },

@@ -1,13 +1,18 @@
-import { Command, IConfigurationService, lazyInject, ServiceIdentifiers } from "@satyrnidae/apdb-api";
-import { toOne } from "@satyrnidae/apdb-utils";
-import { DMChannel, Message, NewsChannel } from "discord.js";
+import { IConfigurationService, IDataService, MessageCommand, ServiceIdentifiers } from "@satyrnidae/apdb-api";
+import { OneOrMany, toOne } from "@satyrnidae/apdb-utils";
+import { DMChannel, Message, NewsChannel, PermissionResolvable } from "discord.js";
+import { injectable } from "inversify";
+import { inject } from "inversify";
 import { Options, Arguments } from 'yargs-parser';
 import { GuildConfiguration } from "../../../db/entity/guild-configuration";
-import { GuildConfigurationFactory } from "../../../db/factory/guild-configuration-factory";
 import { IAppConfiguration } from "../../services/configuration/app-configuration";
 import { CoreMessageService } from "../services/core-message-service";
 
-export class SetPrefixCommand extends Command {
+/**
+ * A command which sets the command prefix for the current guild.
+ */
+@injectable()
+export class SetPrefixCommand extends MessageCommand {
   /**
    * The friendly name of the command
    */
@@ -16,17 +21,30 @@ export class SetPrefixCommand extends Command {
   /**
    * The command that will be executed by the bot.
    */
-  public command: string = 'setPrefix';
+  public name: string = 'setprefix';
 
   /**
    * Command syntax details
    */
-  public syntax: string[] = ['setPrefix [-p|--prefix] {prefix|\'default\'}'];
+  public syntax: OneOrMany<string> = 'setprefix [-p|--prefix] {prefix|\'default\'}';
 
   /**
    * Help text for the command
    */
-  public description: string = 'Allows an administrator to set the command prefix for the guild. Valid prefixes are fifteen characters or less, and should be easy to type.';
+  public description: string = 'Allows an administrator to set the command prefix for the guild.';
+
+  public longDescription: string = 'Valid prefixes are fifteen characters or less, and should be easy to type.\n'
+    .concat('Due to peculiarities related to parsing the command arguments, prefixes ending in a space should be enclosed in both single- and double-quotes. ')
+    .concat('For example, a prefix:')
+    .concat('```hey bot, ```')
+    .concat('would have to be specified with the parameter:')
+    .concat('```"\'hey bot, \'"```')
+    .concat('The prefix may be set back to the default by passing the case-insensitive term "default" as the prefix parameter.');
+
+  /**
+   * Permissions required ot execute the command.
+   */
+  public permissions: PermissionResolvable = 'MANAGE_GUILD';
 
   /**
    * Command parser options
@@ -42,18 +60,18 @@ export class SetPrefixCommand extends Command {
     }
   };
 
-  @lazyInject(CoreMessageService)
-  private readonly coreMessageService!: CoreMessageService;
-
-  @lazyInject(ServiceIdentifiers.Configuration)
-  private readonly configurationService!: IConfigurationService<IAppConfiguration>;
+  constructor(@inject(CoreMessageService) private readonly coreMessageService: CoreMessageService,
+              @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService<IAppConfiguration>,
+              @inject(ServiceIdentifiers.Data) private readonly dataService: IDataService) {
+    super('core');
+  }
 
   /**
    * Executes the set prefix command
    * @param message
    * @param args
    */
-  public async run(message: Message, args: Arguments): Promise<void> {
+  public async execute(message: Message, args: Arguments): Promise<void> {
     if (!message.guild) {
       await this.coreMessageService.sendCannotChangePrefixInDmMessage(message.channel as DMChannel);
       return;
@@ -70,7 +88,7 @@ export class SetPrefixCommand extends Command {
       prefix = await this.configurationService.get('defaultPrefix');
     }
 
-    const guildConfiguration: GuildConfiguration = toOne(await new GuildConfigurationFactory().load({id: message.guild.id}));
+    const guildConfiguration: GuildConfiguration = toOne(await this.dataService.load(GuildConfiguration, {id: message.guild.id}));
     guildConfiguration.commandPrefix = prefix;
     await guildConfiguration.save();
     await this.coreMessageService.sendPrefixChangedSuccessfullyMessage(message, prefix);
@@ -81,8 +99,7 @@ export class SetPrefixCommand extends Command {
    * @param message The message containing the command.
    * @returns A boolean flag determining whether the command is or is not allowed to execute.
    */
-  public async checkPermissions(message: Message): Promise<boolean> {
-    return !(message.channel instanceof NewsChannel) &&
-      (!message.member || message.member.hasPermission('MANAGE_GUILD', { checkAdmin: true, checkOwner: true }));
+  public checkPermissions(message: Message): boolean {
+    return !(message.channel instanceof NewsChannel) && super.checkPermissions(message);
   }
 }

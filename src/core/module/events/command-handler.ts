@@ -1,29 +1,21 @@
-import { lazyInject, ServiceIdentifiers, IConfigurationService, ICommandService, Command, Logger, ILoggingService, MessageEventHandler, IMessageService } from "@satyrnidae/apdb-api";
+import { ServiceIdentifiers, IConfigurationService, ICommandService, Command, Logger, ILoggingService, MessageEventHandler, IMessageService, MessageCommand, SlashOrMessageCommand } from "@satyrnidae/apdb-api";
 import { CoreMessageService } from "../services/core-message-service";
 import { parse } from 'discord-command-parser';
 import { Message } from "discord.js";
-import { toOne } from "@satyrnidae/apdb-utils";
+import { toMany, toOne } from "@satyrnidae/apdb-utils";
 import yparser, { Arguments } from 'yargs-parser';
 import { IAppConfiguration } from "../../services/configuration/app-configuration";
+import { inject } from "inversify";
+import { injectable } from "inversify";
 
+@injectable()
 export class CommandHandler extends MessageEventHandler {
-
-  @lazyInject(ServiceIdentifiers.Configuration)
-  private readonly configurationService!: IConfigurationService<IAppConfiguration>;
-
-  @lazyInject(ServiceIdentifiers.Command)
-  private readonly commandService!: ICommandService;
-
-  @lazyInject(CoreMessageService)
-  private readonly coreMessageService!: CoreMessageService;
-
-  @lazyInject(ServiceIdentifiers.Message)
-  private readonly messageService!: IMessageService;
-
-  @lazyInject(ServiceIdentifiers.Logging)
-  private readonly loggingService!: ILoggingService;
-  constructor(moduleId: string) {
-    super(moduleId);
+  constructor(@inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService<IAppConfiguration>,
+              @inject(ServiceIdentifiers.Command) private readonly commandService: ICommandService,
+              @inject(CoreMessageService) private readonly coreMessageService: CoreMessageService,
+              @inject(ServiceIdentifiers.Message) private readonly messageService: IMessageService,
+              @inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService) {
+    super('core');
   }
 
   /**
@@ -62,18 +54,18 @@ export class CommandHandler extends MessageEventHandler {
     if (!moduleId) {
       // check core modules first
       moduleId = 'core';
-      command = toOne(await this.commandService.get(commandText, moduleId, message.guild));
+      command = toOne(toMany(await this.commandService.get(commandText, { moduleId, guild: message.guild })).filter(command => command instanceof MessageCommand || command instanceof SlashOrMessageCommand));
       if (!command) {
         // not a core command, check all modules
         moduleId = undefined;
-        command = toOne(await this.commandService.get(commandText, moduleId, message.guild));
+        command = toOne(toMany(await this.commandService.get(commandText, { moduleId, guild: message.guild })).filter(command => command instanceof MessageCommand || command instanceof SlashOrMessageCommand));
       }
     } else {
       // check specified module
-      command = toOne(await this.commandService.get(commandText, moduleId, message.guild));
+      command = toOne(toMany(await this.commandService.get(commandText, { moduleId, guild: message.guild })).filter(command => command instanceof MessageCommand || command instanceof SlashOrMessageCommand));
     }
 
-    if (!command) {
+    if (!command || !(command instanceof MessageCommand || command instanceof SlashOrMessageCommand)) {
       log.debug(`${senderId} could not execute command ${moduleId}:${commandText} ${parsedMessage.arguments.join(' ')}: invalid command`);
       return;
     }
@@ -90,7 +82,7 @@ export class CommandHandler extends MessageEventHandler {
     log.debug(`${senderId} executed command ${moduleId}:${commandText} ${parsedMessage.arguments.join(' ')}`);
 
     try {
-      await command.run(message, args);
+      await command.execute(message, args);
     } catch (err) {
       log.error(err);
       this.messageService.reply(message, 'My apologies, I couldn\'t execute that command for some reason!');

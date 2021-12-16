@@ -1,5 +1,4 @@
 import { resolve } from "path";
-import * as semver from 'semver';
 import { Container, ILoggingService, IModuleService, ServiceIdentifiers, IConfigurationService, IClientService, IEventService, Logger, ILifecycle, IDataService, ICommandService, IMessageService } from "@satyrnidae/apdb-api";
 import { sleep, fsa, pickRandom, OneOrMany } from '@satyrnidae/apdb-utils';
 import { ConfigurationService } from "./core/services/configuration-service";
@@ -103,10 +102,11 @@ async function executeLifecycle(lifecycle: ILifecycle): Promise<void> {
 async function run(): Promise<void> {
   // Read package
   const packageInfo: any = JSON.parse((await fsa.readFileAsync('package.json')).toString());
+  const apiPackageInfo: any = JSON.parse((await fsa.readFileAsync('node_modules/@satyrnidae/apdb-api/package.json')).toString());
 
   // Global settings
   (global as any).version = packageInfo.version;
-  (global as any).apiVersion = semver.clean((packageInfo.dependencies['@satyrnidae/apdb-api'] as string).replace('^', ''));
+  (global as any).apiVersion = apiPackageInfo.version;
   (global as any).configPath = resolve(`${__dirname}/../config.json`);
   (global as any).packageInfo = packageInfo;
 
@@ -138,7 +138,7 @@ async function run(): Promise<void> {
   client.on('disconnect', () => log.info('Client disconnected.'));
   client.on('ready', () =>  {
     log.info('Client ready!');
-    new Cli().init();
+    Container.resolve<Cli>(Cli).init();
   });
 
   // Set up process input handlers
@@ -151,17 +151,12 @@ async function run(): Promise<void> {
     log.info('Exiting...');
   });
   process.on('uncaughtException', (error: Error) => {
-    log.error(error);
+    log.error(error.stack);
     process.exit();
   });
-
-  try {
-    // Start the robot
-    const robot: Robot = Container.resolve(Robot);
-    await executeLifecycle(robot);
-  } catch (err) {
-    log.error(err);
-  }
+  // Start the robot
+  const robot: Robot = Container.resolve(Robot);
+  await executeLifecycle(robot);
 }
 
 run();

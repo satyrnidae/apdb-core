@@ -1,5 +1,6 @@
 import { LogLevel, OneOrMany } from "@satyrnidae/apdb-utils";
-import { ColorResolvable, EmojiResolvable } from "discord.js";
+import { OAuth2Scopes } from "discord-api-types";
+import { ColorResolvable, EmojiResolvable, PermissionResolvable } from "discord.js";
 
 /**
  * Application configuration type
@@ -9,6 +10,11 @@ export interface IAppConfiguration {
    * The bot user token with which to connect to Discord.
    */
   token: string;
+
+  /**
+   * The bot application ID, which is needed for slash commands.
+   */
+  appId: string;
 
   /**
    * The default command prefix for all guilds.
@@ -54,4 +60,19 @@ export interface IAppConfiguration {
    * Messages which will be displayed while the program spins up
    */
    startupMessages: OneOrMany<string>;
+
+   /**
+    * Bot typing emulation.
+    */
+   typingEmulation: boolean;
+
+   /**
+    * Bot's default required permissions. This can vary based on plugins.
+    */
+   permissions: PermissionResolvable;
+
+   /**
+    * Bot's default required scopes. This can vary based on plugins.
+    */
+   scopes: OneOrMany<OAuth2Scopes>;
 }

@@ -12,6 +12,7 @@ import { CoreModule } from '../module/core-module';
 import { Guild } from 'discord.js';
 import { GuildConfiguration } from '../../db/entity/guild-configuration';
 import { IAppConfiguration } from './configuration/app-configuration';
+import { resolve } from 'path';
 
 tmp.setGracefulCleanup();
 
@@ -196,6 +197,8 @@ export class ModuleService implements IModuleService {
           this.log.debug('The module path does not resolve to a directory.');
           return;
         }
+      } else {
+        modulePath = resolve(modulePath);
       }
 
       const packageJsonExistsTask: Promise<boolean> = fsa.existsAsync(`${modulePath}/package.json`);
@@ -215,7 +218,7 @@ export class ModuleService implements IModuleService {
 
       const installDependencies: Promise<any> = checkDependenciesAsync({
         packageDir: modulePath,
-        scopeList: ['dependencies', 'peerDependencies'],
+        scopeList: ['dependencies'],
         install: true,
         verbose: true,
         log: (...data: any[]) => this.log.trace(...data),
@@ -227,14 +230,18 @@ export class ModuleService implements IModuleService {
       await installDependencies;
       const moduleImport: any = require(mainFilePath);
       const module: Module = new moduleImport.default(moduleInfo, log);
-      if (!module || !(module instanceof Module)) {
+      if (!module) {
         this.log.warn(`Failed to load module: ${moduleInfo.name}`);
         this.log.debug('Unable to construct the module.');
         return;
       }
+      if (semver.satisfies((global as any).apiVersion, module.moduleInfo.details.apiVersion), true) {
+        await ModulesMutex.dispatch(() => Modules.push(module));
 
-      await ModulesMutex.dispatch(() => Modules.push(module));
-
-      this.log.info(`Loaded new module: ${moduleInfo.id}@${moduleInfo.version}`);
+        this.log.info(`Loaded new module: ${moduleInfo.id}@${moduleInfo.version}`);
+      }
+      else {
+        this.log.warn(`The installed API version (${(global as any).apiVersion}) does not satisfy the required API version or range ${module.moduleInfo.details.apiVersion}. The module load has been skipped.`)
+      }
   }
 }

@@ -1,5 +1,5 @@
 import { injectable, inject } from "inversify";
-import { Command, ICommandService, ServiceIdentifiers, IConfigurationService, ILoggingService, Logger, IDataService } from "@satyrnidae/apdb-api";
+import { Command, ICommandService, ServiceIdentifiers, IConfigurationService, ILoggingService, Logger, IDataService, IClientService, GetCommandOptions } from "@satyrnidae/apdb-api";
 import { Mutex, OneOrMany, toOne, toMany } from "@satyrnidae/apdb-utils";
 import { Guild } from "discord.js";
 import { GuildConfiguration } from "../../db/entity/guild-configuration";
@@ -16,31 +16,32 @@ export class CommandService implements ICommandService {
 
   constructor(@inject(ServiceIdentifiers.Logging) loggingService: ILoggingService,
     @inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService<IAppConfiguration>,
-    @inject(ServiceIdentifiers.Data) private readonly dataService: IDataService) {
+    @inject(ServiceIdentifiers.Data) private readonly dataService: IDataService,
+    @inject(ServiceIdentifiers.Client) private readonly clientService: IClientService) {
     this.log = loggingService.getLogger('core');
   }
 
-  public async get(command: string, moduleId?: string, guild?: Guild): Promise<OneOrMany<Command>> {
-    const commands: Command[] = toMany(await this.getAll(moduleId, guild));
+  public async get(command: string, options: GetCommandOptions): Promise<OneOrMany<Command>> {
+    const commands: Command[] = toMany(await this.getAll(options));
 
-    return commands.filter(entry => entry.command.toLowerCase() === command.toLowerCase());
+    return commands.filter(entry => entry.name.toLowerCase() === command.toLowerCase());
   }
 
-  public async getAll(moduleId?: string, guild?: Guild): Promise<OneOrMany<Command>> {
+  public async getAll(options: GetCommandOptions): Promise<OneOrMany<Command>> {
     let commands: Command[] = await CommandMutex.dispatch(() => Commands);
 
-    if (moduleId) {
-      commands = commands.filter(entry => entry.moduleId === moduleId);
+    if (options?.moduleId) {
+      commands = commands.filter(entry => entry.moduleId === options.moduleId);
     }
 
-    if (guild) {
-      const guildConfiguration: GuildConfiguration = toOne(await this.dataService.load<GuildConfiguration>(GuildConfiguration, { id: guild.id }, true));
+    if (options?.guild) {
+      const guildConfiguration: GuildConfiguration = toOne(await this.dataService.load<GuildConfiguration>(GuildConfiguration, { id: options.guild.id }, true));
       const disabledModules: string[] = guildConfiguration.moduleOptions ? guildConfiguration.moduleOptions.filter(value => value.disabled).map(value => value.moduleId) : [];
       const disabledCommands: CommandOptions[] = guildConfiguration.moduleOptions
         ? guildConfiguration.moduleOptions.filter(value => value && !value.disabled).map(value => value.commands).flat().filter(value => value.disabled) : [];
 
       commands = commands.filter(entry => !disabledModules.includes(entry.moduleId)
-        && !(disabledCommands.filter(value => value.command.toLowerCase() === entry.command.toLowerCase() && value.module.moduleId === entry.moduleId).length));
+        && !(disabledCommands.filter(value => value.command.toLowerCase() === entry.name.toLowerCase() && value.module.moduleId === entry.moduleId).length));
     }
 
     return commands;
@@ -63,18 +64,19 @@ export class CommandService implements ICommandService {
       this.log.warn('A module attempted to register a command without a module ID!');
       return false;
     }
-    if (!command.command) {
+    if (!command.name) {
       this.log.warn(`${command.moduleId} attempted to register an empty command.`);
       return false;
     }
 
     return CommandMutex.dispatch(async (): Promise<boolean> => {
-      if (Commands.filter(registeredCommand => registeredCommand.moduleId === command.moduleId && registeredCommand.command.toLowerCase() === command.command.toLowerCase()).length) {
-        console.trace(`Skipped registration of duplicate command ${command.moduleId}/${command.command}`);
+      if (Commands.filter(registeredCommand => registeredCommand.moduleId === command.moduleId && registeredCommand.name.toLowerCase() === command.name.toLowerCase()).length) {
+        console.trace(`Skipped registration of duplicate command ${command.moduleId}:${command.name}`);
         return false;
       }
 
       Commands.push(command);
+
       return true;
     });
   }

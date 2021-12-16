@@ -1,11 +1,14 @@
 import { Entity, Repository, PrimaryColumn, ManyToOne, Column } from "typeorm";
-import { lazyInject, ServiceIdentifiers, IDataService, DataEntity } from "@satyrnidae/apdb-api";
+import { ServiceIdentifiers, IDataService, DataEntity } from "@satyrnidae/apdb-api";
 import { ModuleOptions } from "./module-options";
+import { inject, injectable } from "inversify";
 
+@injectable()
 @Entity({name: 'core_guildcommandoptions', schema: 'core'})
 export class CommandOptions extends DataEntity {
-  @lazyInject(ServiceIdentifiers.Data)
-  private readonly dataService!: IDataService;
+  constructor(@inject(ServiceIdentifiers.Data) private readonly dataService: IDataService) {
+    super();
+  }
 
   public async save(): Promise<this & CommandOptions> {
     const repository: Repository<CommandOptions> = await this.getRepository();

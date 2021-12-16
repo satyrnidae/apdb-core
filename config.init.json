@@ -1,5 +1,6 @@
 {
   "token": "",
+  "appId": "",
   "defaultPrefix": "!",
   "defaultNickname": "",
   "showWelcomeMessage": true,
@@ -30,5 +31,8 @@
     "💟",
     "♥"
   ],
-  "startupMessages": "Starting up the bot, please wait"
+  "startupMessages": "Starting up the bot, please wait",
+  "typingEmulation": true,
+  "permissions": 543515208768,
+  "scopes": [ "bot", "messages.read", "applications.commands" ]
 }

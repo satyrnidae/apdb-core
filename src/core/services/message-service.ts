@@ -1,10 +1,13 @@
-import { IMessageService, MessageContentResolvable, ServiceIdentifiers, IClientService, ILoggingService, Logger, IConfigurationService, IDataService } from '@satyrnidae/apdb-api';
-import { OneOrMany, toMany, forEachAsync, toOne } from '@satyrnidae/apdb-utils';
-import { Message, Channel, DMChannel, TextChannel, MessageEmbed, User, ChannelResolvable, NewsChannel } from 'discord.js';
+import { IMessageService, ServiceIdentifiers, IClientService, ILoggingService, Logger, IConfigurationService, IDataService } from '@satyrnidae/apdb-api';
+import { OneOrMany, toMany, forEachAsync, toOne, sleep } from '@satyrnidae/apdb-utils';
+import { Message, Channel, DMChannel, TextChannel, PartialDMChannel, MessageEmbed, ChannelResolvable, NewsChannel, MessageActionRow, MessageButton, ThreadChannel, MessagePayload, ReplyMessageOptions, MessageOptions, PartialMessage } from 'discord.js';
 import { inject, injectable } from 'inversify';
-import { Embeds } from 'discord-paginationembed';
 import { GuildConfiguration } from '../../db/entity/guild-configuration';
 import { IAppConfiguration } from './configuration/app-configuration';
+
+type MessageContent = string | MessagePayload | MessageOptions;
+type ReplyMessageContent = string | MessagePayload | ReplyMessageOptions;
+type TextChannelTypes = PartialDMChannel | DMChannel | TextChannel | NewsChannel | ThreadChannel;
 
 @injectable()
 export class MessageService implements IMessageService {
@@ -18,7 +21,7 @@ export class MessageService implements IMessageService {
     this.log = this.loggingService.getLogger('core');
   }
 
-  public async send(channel: ChannelResolvable, content: MessageContentResolvable): Promise<OneOrMany<Message>> {
+  public async send(channel: ChannelResolvable, content: MessageContent): Promise<OneOrMany<Message>> {
     const resolvedChannel: Channel = await this.resolveChannel(channel);
 
     if (!(resolvedChannel && (resolvedChannel instanceof TextChannel || resolvedChannel instanceof DMChannel || resolvedChannel instanceof NewsChannel))) {
@@ -26,37 +29,100 @@ export class MessageService implements IMessageService {
       this.log.trace('Trace information:');
       return [];
     }
-    const messages: Message[] = toMany(await resolvedChannel.send(content));
+    const messages: Message[] = toMany(await this.sendWithTyping(resolvedChannel, content));
     const deletionNotice: Message[] = toMany(await this.sendDeletionExplainer(resolvedChannel));
 
     if (deletionNotice && deletionNotice.length) {
       messages.push(...deletionNotice);
     }
 
-    await this.addDeletionReaction(messages);
-
     return messages;
   }
 
-  public async reply(message: Message, content: MessageContentResolvable): Promise<OneOrMany<Message>> {
+  private async sendWithTyping(channel: TextChannelTypes, content: MessageContent): Promise<OneOrMany<Message>> {
+    await this.pauseForTyping(channel, content);
+
+    const messageContent = this.setDeletionHandlers(content);
+
+    return channel.send(messageContent);
+  }
+
+  private async replyWithTyping(message: Message, content: ReplyMessageContent): Promise<OneOrMany<Message>> {
+    await this.pauseForTyping(message.channel, content);
+
+    const replyMessageContent = this.setDeletionHandlers(content);
+
+    return message.reply(replyMessageContent);
+  }
+
+  private async pauseForTyping(channel: TextChannelTypes, content: MessageContent): Promise<void> {
+    if (!content) {
+      return;
+    }
+
+    let toType: string;
+
+    if (typeof content === 'string') {
+      toType = content;
+    } else if (content instanceof MessagePayload) {
+      toType = content.options.content;
+    } else {
+      toType = content.content;
+    }
+
+    if (!toType || !toType.length) return;
+
+    if ((await this.configurationService.get('typingEmulation'))) {;
+      channel.sendTyping();
+
+      this.log.debug(`Typing a message for 250 milliseconds.`);
+
+      await sleep(250)
+    }
+  }
+
+  private setDeletionHandlers(content: MessageContent) : MessagePayload | MessageOptions {
+    const deleteAction: MessageActionRow = new MessageActionRow()
+    .addComponents([
+      new MessageButton()
+        .setCustomId('deleteMessage')
+        .setLabel('Delete')
+        .setStyle('DANGER')
+    ]);
+
+    if (typeof content === 'string') {
+      return {content: content, components: [deleteAction]}
+    } else if (content instanceof MessagePayload) {
+      content.options.components.push(deleteAction);
+    } else {
+      if (!content.components) {
+        content.components = [];
+      }
+      content.components.push(deleteAction);
+    }
+
+    return content;
+  }
+
+  public async reply(message: Message, content: ReplyMessageContent): Promise<OneOrMany<Message>> {
     if (!message) {
       this.log.error('Failed to delete message: Could not resolve the message object!');
       return [];
     }
 
-    const messages: Message[] = toMany(await message.reply(content));
+    const messages: Message[] = [];
+
+    messages.push(...toMany(await this.replyWithTyping(message, content)));
     const deletionNotice: Message[] = toMany(await this.sendDeletionExplainer(message.channel));
 
     if (deletionNotice && deletionNotice.length) {
       messages.push(...deletionNotice);
     }
 
-    await this.addDeletionReaction(messages);
-
     return messages;
   }
 
-  public async delete(message: Message): Promise<Message> {
+  public async delete(message: Message<boolean> | PartialMessage): Promise<Message> {
     if (!message) {
       this.log.error('Failed to delete message: Could not resolve the message object!');
       return null;
@@ -69,67 +135,29 @@ export class MessageService implements IMessageService {
     return message.delete();
   }
 
-  public async replyWithPaginatedEmbed(embeds: MessageEmbed[], replyTo: Message, content?: MessageContentResolvable, page: number = 0): Promise<void> {
+  public async replyWithPaginatedEmbed(embeds: MessageEmbed[], replyTo: Message, content?: ReplyMessageContent, page: number = 0): Promise<void> {
     if (!replyTo) {
       this.log.error('Failed to delete message: Could not resolve the message object!');
-      return null;
+      return;
     }
 
-    let message: Message;
-    if (content) {
-      message = toOne(await replyTo.reply(content))
-    }
-    const currentPage: number = Math.min(embeds.length, page);
-    const paginatedEmbeds = new Embeds()
-      .setArray(embeds)
-      .setAuthorizedUsers([replyTo.author.id])
-      .setChannel(<TextChannel | DMChannel>replyTo.channel)
-      .setPageIndicator('footer')
-      .setColor(await this.configurationService.get('embedColor'))
-      .setDeleteOnTimeout(!message)
-      .setPage(currentPage)
-      .setClientAssets({message})
-      .on('start', () => this.log.debug('Replied with a new paginated embed.'))
-      .on('finish', async (user: User) => {
-        this.log.debug(`User ${user.username} finished a paginated embed.`);
-      })
-      .on('expire', async () => {
-        this.log.debug('A paginated embed expired.');
-        if (message) {
-          await message.reactions.removeAll();
-          await this.addDeletionReaction(message);
-        }
-      })
-      .on('error', (error: Error) => this.log.error(error));
-
-    if (message) {
-      paginatedEmbeds.setClientAssets({message});
-    }
-
-    return paginatedEmbeds.build();
+    return;
   }
 
-  private async sendDeletionExplainer(channel: TextChannel | DMChannel | NewsChannel): Promise<OneOrMany<Message>> {
-    if (channel instanceof DMChannel) {
-      return [];
+  private async sendDeletionExplainer(channel: TextChannelTypes): Promise<OneOrMany<Message>> {
+    if ("guild" in channel) {
+      const guildConfiguration: GuildConfiguration = toOne(await this.dataService.find(GuildConfiguration, {id: channel.guild.id}));
+      if (!guildConfiguration.hasDeletedMessage) {
+        guildConfiguration.hasDeletedMessage = true;
+        await guildConfiguration.save();
+
+        const content: string = 'This is the first message I\'ve sent in this guild, so you should know that if you\'d like to delete any messages I send in the future, just react with the "🗑️" emote!';
+
+        return this.sendWithTyping(channel, content);
+      }
     }
 
-    const guildConfiguration: GuildConfiguration = toOne(await this.dataService.find(GuildConfiguration, {id: channel.guild.id}));
-    if (!guildConfiguration.hasDeletedMessage) {
-      guildConfiguration.hasDeletedMessage = true;
-      guildConfiguration.save();
-
-      return channel.send('This is the first message I\'ve sent in this guild, so you should know that if you\'d like to delete any messages I send in the future, just react with the "🗑️" emote!');
-    }
     return [];
-  }
-
-  private async addDeletionReaction(messages: OneOrMany<Message>): Promise<void> {
-    const manyMessages: Message[] = toMany(messages);
-
-    return forEachAsync(manyMessages, async (message: Message): Promise<void> => {
-      await message.react('🗑️');
-    });
   }
 
   private async resolveChannel(channel: ChannelResolvable): Promise<Channel> {
@@ -137,7 +165,7 @@ export class MessageService implements IMessageService {
     if (channel instanceof Channel) {
       resolvedChannel = await channel.fetch();
     } else {
-      this.clientService.getClient().channels.fetch(channel, true);
+      this.clientService.getClient().channels.fetch(channel, {force: true, cache: true});
     }
 
     return resolvedChannel;

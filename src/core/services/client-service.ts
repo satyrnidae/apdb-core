@@ -1,9 +1,16 @@
 import { injectable, inject } from "inversify";
 import { IClientService, ServiceIdentifiers, IConfigurationService } from "@satyrnidae/apdb-api";
-import { Client } from "discord.js";
+import { Client, Intents } from "discord.js";
 import { IAppConfiguration } from "./configuration/app-configuration";
 
-const TheClient: Client = new Client();
+const TheClient: Client = new Client({intents: [
+  Intents.FLAGS.DIRECT_MESSAGES,
+  Intents.FLAGS.DIRECT_MESSAGE_REACTIONS,
+  Intents.FLAGS.GUILDS,
+  Intents.FLAGS.GUILD_MESSAGES,
+  Intents.FLAGS.GUILD_MESSAGE_REACTIONS,
+  Intents.FLAGS.GUILD_PRESENCES
+]});
 
 @injectable()
 export class ClientService implements IClientService {

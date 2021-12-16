@@ -3,9 +3,11 @@ import { CoreMessageService } from "./services/core-message-service";
 import { ReadyHandler } from "./events/ready-handler";
 import { CommandHandler } from "./events/command-handler";
 import { HelpCommand } from "./commands/help-command";
-import { DeleteReactionHandler } from "./events/delete-reaction-handler";
+import { DeleteInteractionHandler } from "./events/delete-interaction-handler";
 import { Candidates } from "../../core/services/module/candidate-validation";
 import { SetPrefixCommand } from "./commands/set-prefix-command";
+import { CommandInteractionHandler } from "./events/command-interaction-handler";
+import { InviteCommand } from "./commands/invite-command";
 
 export class CoreModule extends Module {
 
@@ -28,13 +30,15 @@ export class CoreModule extends Module {
 
   public async preInitialize(): Promise<void> {
     this.commands.push(...[
-      new HelpCommand('core'),
-      new SetPrefixCommand('core')
+      Container.resolve(HelpCommand),
+      Container.resolve(SetPrefixCommand),
+      Container.resolve(InviteCommand)
     ]);
     this.events.push(...[
-      new ReadyHandler('core'),
-      new CommandHandler('core'),
-      new DeleteReactionHandler('core')
+      Container.resolve(ReadyHandler),
+      Container.resolve(CommandHandler),
+      Container.resolve(DeleteInteractionHandler),
+      Container.resolve(CommandInteractionHandler)
     ]);
   }
 
