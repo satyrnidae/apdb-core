@@ -12,11 +12,6 @@ export interface IAppConfiguration {
   token: string;
 
   /**
-   * The bot application ID, which is needed for slash commands.
-   */
-  appId: string;
-
-  /**
    * The default command prefix for all guilds.
    */
   defaultPrefix: string;
@@ -75,4 +70,9 @@ export interface IAppConfiguration {
     * Bot's default required scopes. This can vary based on plugins.
     */
    scopes: OneOrMany<OAuth2Scopes>;
+
+   /**
+    * Determines whether the bot will allow other bots to send command messages.
+    */
+   allowBotShenanigans: boolean;
 }

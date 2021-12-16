@@ -12,7 +12,6 @@ import { injectable } from "inversify";
 export class CommandHandler extends MessageEventHandler {
   constructor(@inject(ServiceIdentifiers.Configuration) private readonly configurationService: IConfigurationService<IAppConfiguration>,
               @inject(ServiceIdentifiers.Command) private readonly commandService: ICommandService,
-              @inject(CoreMessageService) private readonly coreMessageService: CoreMessageService,
               @inject(ServiceIdentifiers.Message) private readonly messageService: IMessageService,
               @inject(ServiceIdentifiers.Logging) private readonly loggingService: ILoggingService) {
     super('core');
@@ -27,12 +26,14 @@ export class CommandHandler extends MessageEventHandler {
 
     const senderId: string = message.author.tag;
 
+    const allowBots: boolean = await this.configurationService.get('allowBotShenanigans');
+
     let prefix: string = await this.commandService.getCommandPrefix(message.guild);
-    let parsedMessage = parse(message, prefix);
+    let parsedMessage = parse(message, prefix, { allowBots });
 
     if (!parsedMessage.success) {
       prefix = await this.configurationService.get('defaultPrefix');
-      parsedMessage = parse(message, prefix);
+      parsedMessage = parse(message, prefix, { allowBots });
       if (!parsedMessage.success || parsedMessage.command !== 'help') {
         return;
       }
