@@ -58,7 +58,7 @@
     "reflect-metadata": "^0.1.13",
     "semver": "^7.3.5",
     "serverline": "^1.5.0",
-    "sqlite3": "^5.0.2",
+    "sqlite3": "^5.0.3",
     "tmp-promise": "^3.0.3",
     "typeorm": "^0.2.41",
     "xmlhttprequest": "^1.8.0",
